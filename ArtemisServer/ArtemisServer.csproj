@@ -59,10 +59,21 @@
     <Reference Include="UnityEngine.Networking">
       <HintPath>..\..\..\..\Documents\Atlas Reactor\Live\Win64\AtlasReactor_Data\Managed\UnityEngine.Networking.dll</HintPath>
     </Reference>
+    <Reference Include="websocket-sharp, Version=1.0.2.20671, Culture=neutral, PublicKeyToken=5660b08a1845a91e, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\..\..\..\Artemis\Win64\AtlasReactor_Data\Managed\websocket-sharp.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ArtemisServer.cs" />
+    <Compile Include="BridgeServer\WebsocketManager.cs" />
+    <Compile Include="GameMessageManager.cs" />
+    <Compile Include="Map\CommonObjectsSpawner.cs" />
+    <Compile Include="Map\PlayerSpawner.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="GameServer\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

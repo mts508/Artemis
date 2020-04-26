@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArtemisServer", "ArtemisSer
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Run", "..\Run\Run.csproj", "{91276D27-70F8-4D54-A0E0-34A0BEFF6559}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AtlasReactorCommon", "..\AtlasReactorCommon\AtlasReactorCommon.csproj", "{2C272248-48C8-41AF-BF19-6392092FF056}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{91276D27-70F8-4D54-A0E0-34A0BEFF6559}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{91276D27-70F8-4D54-A0E0-34A0BEFF6559}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{91276D27-70F8-4D54-A0E0-34A0BEFF6559}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C272248-48C8-41AF-BF19-6392092FF056}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C272248-48C8-41AF-BF19-6392092FF056}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C272248-48C8-41AF-BF19-6392092FF056}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C272248-48C8-41AF-BF19-6392092FF056}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

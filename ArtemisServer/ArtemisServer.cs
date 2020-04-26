@@ -1,4 +1,6 @@
-﻿using System;
+﻿using ArtemisServer;
+using ArtemisServer.BridgeServer;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -11,74 +13,27 @@ namespace Artemis
     public class ArtemisServer
     {
         bool IsMapLoaded;
-        LobbyGameInfo GameInfo;
-        LobbyTeamInfo TeamInfo;
+        static LobbyGameInfo GameInfo;
+        static LobbyTeamInfo TeamInfo;
+        public static String Address = "127.0.0.1";
+        public static int Port = 6061;
 
         public void Start()
         {
             Log.Info("Starting Server...");
             NetworkServer.useWebSockets = true;
-            NetworkServer.Listen(6061);
+            NetworkServer.Listen(Port);
 
             // Regiser Network Handlers
-            NetworkServer.RegisterHandler((short)MsgType.AddPlayer, new NetworkMessageDelegate(this.HandleAddPlayer));
-            NetworkServer.RegisterHandler((short)MyMsgType.LoginRequest, new NetworkMessageDelegate(this.HandleLoginRequest));
+            GameMessageManager.RegisterAllHandlers();
 
             // Load map bundle
             AssetBundle MapsBundle = AssetBundle.LoadFromFile(@"C:\Artemis\Win64\AtlasReactor_Data\Bundles\scenes\maps.bundle");
 
-            // Print loaded scenes from bundle
-            //foreach (string scenePath in MapsBundle.GetAllScenePaths()) { Log.Info(scenePath); }
-
-
-            GameInfo = new LobbyGameInfo
-            {
-                ActivePlayers = 512,
-                GameConfig = new LobbyGameConfig
-                {
-                    Map = "EvosLab_Deathmatch",
-                    GameType = GameType.PvP,
-                    SubTypes = new List<GameSubType>
-                    {
-                        new GameSubType
-                        {
-                            
-                        }
-                    }
-               }
-            };
-            TeamInfo = new LobbyTeamInfo
-            {
-                TeamPlayerInfo = new List<LobbyPlayerInfo>()
-                {
-                    new LobbyPlayerInfo
-                    {
-                        AccountId = 1,
-                        CharacterInfo = new LobbyCharacterInfo
-                        {
-                            CharacterType = CharacterType.Scoundrel
-                        },
-                        Handle = "Yamari",
-                        IsNPCBot = false,
-                        TeamId = Team.TeamA
-                    },
-                    new LobbyPlayerInfo
-                    {
-                        AccountId = 1,
-                        CharacterInfo = new LobbyCharacterInfo
-                        {
-                            CharacterType = CharacterType.BazookaGirl
-                        },
-                        Handle = "mts508",
-                        IsNPCBot = false,
-                        TeamId = Team.TeamB
-                    }
-                }
-            };
-
+            WebsocketManager.Init();
             // Load current map
-            SceneManager.sceneLoaded += this.OnSceneLoaded;
-            LoadMap();
+            //SceneManager.sceneLoaded += this.OnSceneLoaded;
+            //LoadMap();
         }
 
         public void Reset()
@@ -95,6 +50,7 @@ namespace Artemis
             ActorData actorData = character.GetComponent<ActorData>();
             PlayerData playerData = character.GetComponent<PlayerData>();
             playerData.PlayerIndex = playerIndex;
+            
             
             actorData.SetTeam(playerInfo.TeamId);
             actorData.UpdateDisplayName(playerInfo.Handle);
@@ -184,38 +140,15 @@ namespace Artemis
             DumpSceneObjects();
         }
 
-        public void HandleAddPlayer(NetworkMessage message)
+        public static void SetGameInfo(LobbyGameInfo gameInfo)
         {
-            AddPlayerMessage addPlayerMessage = message.ReadMessage<AddPlayerMessage>();
-            
-            Log.Info($"AddPlayerMessage {addPlayerMessage.playerControllerId}");
+            GameInfo = gameInfo;
+            Log.Info("Setting Game Info");
         }
-
-        public void HandleLoginRequest(NetworkMessage message)
+        public static void SetTeamInfo(LobbyTeamInfo teamInfo)
         {
-            GameManager.LoginRequest loginRequest = message.ReadMessage<GameManager.LoginRequest>();
-            Log.Info("Login re quest wacho");
-
-            Player player = GameFlow.Get().GetPlayerFromConnectionId(message.conn.connectionId);
-            if (player.m_connectionId != message.conn.connectionId)
-            {
-                player.m_connectionId = message.conn.connectionId;
-                player.m_accountId = Convert.ToInt64(loginRequest.AccountId);
-                player.m_valid = true;
-                player.m_id = 0; // 0 because i dont know what it does
-
-                GameFlow.Get().playerDetails[player] = new PlayerDetails(PlayerGameAccountType.Human)
-                {
-                    m_accountId = player.m_accountId,
-                    m_disconnected = false,
-                    m_handle = "Connecting Player",
-                    m_idleTurns = 0,
-                    m_team = Team.Invalid
-                };
-
-                
-            }
-            
+            TeamInfo = teamInfo;
+            Log.Info("Setting Team Info");
         }
     }
 }
