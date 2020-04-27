@@ -1,8 +1,10 @@
 ﻿using ArtemisServer;
 using ArtemisServer.BridgeServer;
+using ArtemisServer.Map;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.Networking.NetworkSystem;
@@ -12,14 +14,18 @@ namespace Artemis
 {
     public class ArtemisServer
     {
+        private static ArtemisServer instance;
+        private static GameObject highlightUtilsPrefab;
         bool IsMapLoaded;
-        static LobbyGameInfo GameInfo;
-        static LobbyTeamInfo TeamInfo;
+        LobbyGameInfo GameInfo;
+        LobbyTeamInfo TeamInfo;
         public static String Address = "127.0.0.1";
         public static int Port = 6061;
 
         public void Start()
         {
+            instance = this;
+
             Log.Info("Starting Server...");
             NetworkServer.useWebSockets = true;
             NetworkServer.Listen(Port);
@@ -28,12 +34,22 @@ namespace Artemis
             GameMessageManager.RegisterAllHandlers();
 
             // Load map bundle
-            AssetBundle MapsBundle = AssetBundle.LoadFromFile(@"C:\Artemis\Win64\AtlasReactor_Data\Bundles\scenes\maps.bundle");
+            AssetBundle MapsBundle = AssetBundle.LoadFromFile(Path.Combine(Application.dataPath, @"Bundles\scenes\maps.bundle"));
 
             WebsocketManager.Init();
-            // Load current map
-            //SceneManager.sceneLoaded += this.OnSceneLoaded;
-            //LoadMap();
+
+            // to keep highlight utils for now
+            ClientGamePrefabInstantiator prefabInstantiator = ClientGamePrefabInstantiator.Get();
+            foreach(var prefab in prefabInstantiator.m_prefabs)
+            {
+                Log.Info($"client prefab: {prefab.name}");
+                if (prefab.name == "HighlightUtilsSingleton")
+                {
+                    highlightUtilsPrefab = prefab;
+                    break;
+                }
+            }
+            GameObject.Destroy(prefabInstantiator);
         }
 
         public void Reset()
@@ -41,11 +57,17 @@ namespace Artemis
             IsMapLoaded = false;
         }
 
+        public static void StartGame()
+        {
+            SceneManager.sceneLoaded += instance.OnSceneLoaded;
+            instance.LoadMap();
+        }
+
         public void AddCharacterActor(LobbyPlayerInfo playerInfo, int playerIndex)
         {
-            GameObject character = Resources.Load<GameObject>(playerInfo.CharacterType.ToString());
+            GameObject prefab = Resources.Load<GameObject>(playerInfo.CharacterType.ToString());
 
-            GameObject.Instantiate(character);
+            GameObject character = GameObject.Instantiate(prefab);
 
             ActorData actorData = character.GetComponent<ActorData>();
             PlayerData playerData = character.GetComponent<PlayerData>();
@@ -75,6 +97,7 @@ namespace Artemis
                 DumpGameObject(gameObject);
             }
         }
+
         public void DumpGameObject(GameObject gameObject, int deep = 0)
         {
             
@@ -103,8 +126,11 @@ namespace Artemis
             Log.Info(indentation + component.name + " " + component.GetType());
         }
 
-        public void LoadMap() {
-            SceneManager.LoadScene(GameInfo.GameConfig.Map.ToString(), LoadSceneMode.Single);
+        private void LoadMap()
+        {
+            string map = GameInfo.GameConfig.Map.ToString();
+            UIFrontendLoadingScreen.Get().StartDisplayError("Loading " + map);
+            SceneManager.LoadScene(map, LoadSceneMode.Single);
         }
 
         public void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -118,10 +144,12 @@ namespace Artemis
             IsMapLoaded = true;
 
             Log.Info("OnSceneLoaded -> " + SceneManager.GetActiveScene().name);
+            UIFrontendLoadingScreen.Get().StartDisplayError("Map loaded");
 
-            GameObject gameManagerObj = new GameObject("GameManager");
-            gameManagerObj.AddComponent<GameManager>();
-            GameObject.Instantiate(gameManagerObj);
+            GameObject.Instantiate(Artemis.ArtemisServer.highlightUtilsPrefab);
+            CommonObjectsSpawner.Spawn();
+
+            var board = Board.Get();
 
             GameManager.Get().SetTeamInfo(TeamInfo);
             GameManager.Get().SetGameInfo(GameInfo);
@@ -142,12 +170,12 @@ namespace Artemis
 
         public static void SetGameInfo(LobbyGameInfo gameInfo)
         {
-            GameInfo = gameInfo;
+            instance.GameInfo = gameInfo;
             Log.Info("Setting Game Info");
         }
         public static void SetTeamInfo(LobbyTeamInfo teamInfo)
         {
-            TeamInfo = teamInfo;
+            instance.TeamInfo = teamInfo;
             Log.Info("Setting Team Info");
         }
     }

@@ -34,6 +34,7 @@ namespace ArtemisServer.BridgeServer
         private void Ws_OnOpen(object sender, EventArgs e)
         {
             Log.Info("Successfully connected to lobby's bridge server");
+            UIFrontendLoadingScreen.Get().StartDisplayError("connected to bridge server");
             MemoryStream stream = new MemoryStream();
             stream.WriteByte((byte)BridgeMessageType.InitialConfig);
             string addressAndPort = Artemis.ArtemisServer.Address + ":" + Artemis.ArtemisServer.Port;
@@ -77,6 +78,9 @@ namespace ArtemisServer.BridgeServer
                 case BridgeMessageType.SetTeamInfo:
                     LobbyTeamInfo teamInfo = JsonConvert.DeserializeObject<LobbyTeamInfo>(data);
                     Artemis.ArtemisServer.SetTeamInfo(teamInfo);
+                    break;
+                case BridgeMessageType.Start:
+                    Artemis.ArtemisServer.StartGame();
                     break;
                 default:
                     Log.Error("Received unhandled ws message type: " + messageType.ToString());

@@ -9,11 +9,19 @@ namespace ArtemisServer.Map
 {
     static class CommonObjectsSpawner
     {
+        private static GameObject Instantiate(string name, Type componentType)
+        {
+            GameObject obj = new GameObject(name);
+            obj.AddComponent(componentType);
+            return GameObject.Instantiate(obj);
+        }
+
         public static void Spawn()
         {
-            GameObject highlightUtilsObj = new GameObject("HighlightUtils");
-            highlightUtilsObj.AddComponent<HighlightUtils>();
-            GameObject.Instantiate(highlightUtilsObj);
+            Instantiate("TeamStatusDisplay", typeof(TeamStatusDisplay));
+            Instantiate("GameFlow", typeof(GameFlow));
+            Instantiate("GameFlowData", typeof(GameFlowData));
+            Instantiate("GameplayData", typeof(GameplayData));
         }
     }
 }
