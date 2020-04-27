@@ -1,4 +1,27 @@
-ArtemisServer/bin
-ArtemisServer/obj
-Run/bin
-Run/obj
+# Visual Studio user specific files
+.vs/
+
+# Compiled Dynamic libraries
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+*.ipa
+
+# Binary Files
+Binaries/*
+Plugins/*/Binaries/*
+
+# Builds
+ArtemisServer/bin/*
+ArtemisServer/obj/*
+Run/bin/*
+Run/obj/*
+
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
