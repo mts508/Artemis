@@ -145,9 +145,15 @@ namespace Artemis
 
             Log.Info("OnSceneLoaded -> " + SceneManager.GetActiveScene().name);
             UIFrontendLoadingScreen.Get().StartDisplayError("Map loaded");
+            foreach (GameObject sceneObject in scene.GetRootGameObjects())
+            {
+                if (sceneObject.GetComponent<NetworkIdentity>() != null && !sceneObject.activeSelf)
+                {
+                    Log.Info($"Activating scene object '{sceneObject.name}'");
+                    sceneObject.SetActive(true);
+                }
+            }
 
-            GameObject.Instantiate(Artemis.ArtemisServer.highlightUtilsPrefab);
-            CommonObjectsSpawner.Spawn();
 
             var board = Board.Get();
 
