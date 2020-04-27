@@ -83,9 +83,6 @@ namespace Artemis
             actorData.SetTeam(playerInfo.TeamId);
             actorData.UpdateDisplayName(playerInfo.Handle);
             actorData.PlayerIndex = playerIndex;
-
-            GameFlowData.Get().AddPlayer(character);
-            GameFlowData.Get().AddActor(actorData);
         }
 
         public void DumpSceneObjects()
@@ -138,7 +135,7 @@ namespace Artemis
         {
             Log.Info("Loaded scene map: " + SceneManager.GetActiveScene().name);
             UIFrontendLoadingScreen.Get().StartDisplayError("Map loaded");
-            IsMapLoaded = true;
+            
 
             GameObject.Instantiate(Artemis.ArtemisServer.highlightUtilsPrefab);
 
@@ -151,23 +148,24 @@ namespace Artemis
                 }
             }
 
-
             var board = Board.Get();
 
             GameManager.Get().SetTeamInfo(TeamInfo);
-            GameManager.Get().SetGameInfo(GameInfo);
+            GameManager.Get().SetGameInfo(GameInfo);            
 
-            int id_player = 0;
-
-            List<LobbyPlayerInfo> playerInfoList = GameManager.Get().TeamInfo.TeamPlayerInfo;
-
-            for (int i=0; i<playerInfoList.Count; i++)
+            // Avoid creating characters two times because OnSceneLoaded() gets called two times because VisualsLoader changes the current scene...
+            if (!IsMapLoaded) 
             {
-                LobbyPlayerInfo playerInfo = playerInfoList[i];
-                AddCharacterActor(playerInfo, i);
-            }
+                List<LobbyPlayerInfo> playerInfoList = GameManager.Get().TeamInfo.TeamPlayerInfo;
+                IsMapLoaded = true;
+                for (int i = 0; i < playerInfoList.Count; i++)
+                {
+                    LobbyPlayerInfo playerInfo = playerInfoList[i];
+                    AddCharacterActor(playerInfo, i);
+                }
 
-            DumpSceneObjects();
+                DumpSceneObjects();
+            }
         }
 
         public static void SetGameInfo(LobbyGameInfo gameInfo)
