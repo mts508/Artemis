@@ -12,6 +12,7 @@ namespace ArtemisServer.BridgeServer
     {
         private static WebsocketManager Instance;
         private static WebSocketSharp.WebSocket ws;
+        private static string BridgeServerAddress = "ws://127.0.0.1:6060/BridgeServer";
 
         public enum BridgeMessageType
         {
@@ -24,7 +25,8 @@ namespace ArtemisServer.BridgeServer
         }
         private WebsocketManager()
         {
-            ws = new WebSocketSharp.WebSocket("ws://127.0.0.1:6060/BridgeServer");
+            UIFrontendLoadingScreen.Get().StartDisplayError("trying to connect to bridge server ", "at address: "+BridgeServerAddress);
+            ws = new WebSocketSharp.WebSocket(BridgeServerAddress);
             ws.OnMessage += Ws_OnMessage;
             ws.OnError += Ws_OnError;
             ws.OnOpen += Ws_OnOpen;
@@ -47,13 +49,15 @@ namespace ArtemisServer.BridgeServer
 
         private void Ws_OnError(object sender, WebSocketSharp.ErrorEventArgs e)
         {
-            Log.Info("ws error!!!!!!!");
+            Log.Info("--- Websocket Error ---");
+            Log.Info(e.Exception.Source);
             Log.Info(e.Message);
+            Log.Info(e.Exception.StackTrace);
         }
 
         public static void Init()
         {
-            Log.Info("init ws bridge");
+            Log.Info("Init WebsocketManager");
             Instance = new WebsocketManager();
         }
 
@@ -81,6 +85,7 @@ namespace ArtemisServer.BridgeServer
                     break;
                 case BridgeMessageType.Start:
                     Artemis.ArtemisServer.StartGame();
+                    ws.Send(new byte[] { (byte)BridgeMessageType.Start }); // tell the lobby server that we started successfully
                     break;
                 default:
                     Log.Error("Received unhandled ws message type: " + messageType.ToString());

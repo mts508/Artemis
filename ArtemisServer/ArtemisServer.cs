@@ -1,4 +1,4 @@
-using ArtemisServer;
+﻿using ArtemisServer;
 using ArtemisServer.BridgeServer;
 using ArtemisServer.Map;
 using System;
@@ -27,6 +27,7 @@ namespace Artemis
             instance = this;
 
             Log.Info("Starting Server...");
+            UIFrontendLoadingScreen.Get().StartDisplayError("Starting Server...");
             NetworkServer.useWebSockets = true;
             NetworkServer.Listen(Port);
 
@@ -135,16 +136,12 @@ namespace Artemis
 
         public void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            Log.Info("Active scene: " + SceneManager.GetActiveScene().name);
-
-            VisualsLoader visualsLoader = GameObject.FindObjectOfType<VisualsLoader>();
-            if (visualsLoader != null)
-                GameObject.Destroy(visualsLoader);
-
+            Log.Info("Loaded scene map: " + SceneManager.GetActiveScene().name);
+            UIFrontendLoadingScreen.Get().StartDisplayError("Map loaded");
             IsMapLoaded = true;
 
-            Log.Info("OnSceneLoaded -> " + SceneManager.GetActiveScene().name);
-            UIFrontendLoadingScreen.Get().StartDisplayError("Map loaded");
+            GameObject.Instantiate(Artemis.ArtemisServer.highlightUtilsPrefab);
+
             foreach (GameObject sceneObject in scene.GetRootGameObjects())
             {
                 if (sceneObject.GetComponent<NetworkIdentity>() != null && !sceneObject.activeSelf)
@@ -160,7 +157,6 @@ namespace Artemis
             GameManager.Get().SetTeamInfo(TeamInfo);
             GameManager.Get().SetGameInfo(GameInfo);
 
-            Log.Info(GameManager.Get().TeamInfo.ToJson());
             int id_player = 0;
 
             List<LobbyPlayerInfo> playerInfoList = GameManager.Get().TeamInfo.TeamPlayerInfo;
