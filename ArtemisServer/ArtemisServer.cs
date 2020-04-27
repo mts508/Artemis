@@ -1,4 +1,4 @@
-﻿using ArtemisServer;
+using ArtemisServer;
 using ArtemisServer.BridgeServer;
 using ArtemisServer.Map;
 using System;
@@ -65,8 +65,13 @@ namespace Artemis
 
         public void AddCharacterActor(LobbyPlayerInfo playerInfo, int playerIndex)
         {
-            GameObject prefab = Resources.Load<GameObject>(playerInfo.CharacterType.ToString());
+            string characterResourcePath = playerInfo.CharacterType.ToString();
+            if (playerInfo.CharacterType == CharacterType.PunchingDummy) // PunchingDummy has a _ in its resource name...
+                characterResourcePath = "Punching_Dummy";
 
+            Log.Info($"Add Character {characterResourcePath} for player {playerInfo.Handle}");
+
+            GameObject prefab = Resources.Load<GameObject>(characterResourcePath);
             GameObject character = GameObject.Instantiate(prefab);
 
             ActorData actorData = character.GetComponent<ActorData>();
@@ -80,11 +85,6 @@ namespace Artemis
 
             GameFlowData.Get().AddPlayer(character);
             GameFlowData.Get().AddActor(actorData);
-
-            
-
-            Log.Info("AddCharacterActor");
-            DumpGameObject(character);
         }
 
         public void DumpSceneObjects()
