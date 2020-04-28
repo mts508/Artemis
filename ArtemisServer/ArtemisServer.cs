@@ -64,7 +64,7 @@ namespace Artemis
             instance.LoadMap();
         }
 
-        public void AddCharacterActor(LobbyPlayerInfo playerInfo, int playerIndex)
+        public void AddCharacterActor(LobbyPlayerInfo playerInfo)
         {
             string characterResourcePath = playerInfo.CharacterType.ToString();
             if (playerInfo.CharacterType == CharacterType.PunchingDummy) // PunchingDummy has a _ in its resource name...
@@ -76,13 +76,14 @@ namespace Artemis
             GameObject character = GameObject.Instantiate(prefab);
 
             ActorData actorData = character.GetComponent<ActorData>();
+            actorData.PlayerIndex = playerInfo.PlayerId;
             PlayerData playerData = character.GetComponent<PlayerData>();
-            playerData.PlayerIndex = playerIndex;
-            
+            playerData.PlayerIndex = playerInfo.PlayerId;
             
             actorData.SetTeam(playerInfo.TeamId);
             actorData.UpdateDisplayName(playerInfo.Handle);
-            actorData.PlayerIndex = playerIndex;
+            actorData.PlayerIndex = playerInfo.PlayerId;
+
         }
 
         public void DumpSceneObjects()
@@ -163,7 +164,7 @@ namespace Artemis
                 for (int i = 0; i < playerInfoList.Count; i++)
                 {
                     LobbyPlayerInfo playerInfo = playerInfoList[i];
-                    AddCharacterActor(playerInfo, i);
+                    AddCharacterActor(playerInfo);
                 }
 
                 DumpSceneObjects();
