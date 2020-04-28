@@ -50,7 +50,7 @@ namespace Artemis
                     break;
                 }
             }
-            GameObject.Destroy(prefabInstantiator);
+            //GameObject.Destroy(prefabInstantiator);
         }
 
         public void Reset()
