@@ -1,4 +1,4 @@
-﻿using ArtemisServer;
+using ArtemisServer;
 using ArtemisServer.BridgeServer;
 using ArtemisServer.Map;
 using System;
@@ -136,8 +136,10 @@ namespace Artemis
             Log.Info("Loaded scene map: " + SceneManager.GetActiveScene().name);
             UIFrontendLoadingScreen.Get().StartDisplayError("Map loaded");
             
-
             GameObject.Instantiate(Artemis.ArtemisServer.highlightUtilsPrefab);
+
+            GameManager.Get().SetTeamInfo(TeamInfo);
+            GameManager.Get().SetGameInfo(GameInfo);
 
             foreach (GameObject sceneObject in scene.GetRootGameObjects())
             {
@@ -150,8 +152,8 @@ namespace Artemis
 
             var board = Board.Get();
 
-            GameManager.Get().SetTeamInfo(TeamInfo);
-            GameManager.Get().SetGameInfo(GameInfo);            
+            
+
 
             // Avoid creating characters two times because OnSceneLoaded() gets called two times because VisualsLoader changes the current scene...
             if (!IsMapLoaded) 
