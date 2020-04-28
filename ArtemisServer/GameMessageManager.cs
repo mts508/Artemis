@@ -28,13 +28,17 @@ namespace ArtemisServer
 
         private static void HandleAddPlayer(NetworkMessage message)
         {
+            Log.Info("ADDPLAYER");
             AddPlayerMessage addPlayerMessage = message.ReadMessage<AddPlayerMessage>();
         }
 
         private static void HandleLoginRequest(NetworkMessage message)
         {
+            Log.Info("LOGIN REQUEST");
             GameManager.LoginRequest loginRequest = message.ReadMessage<GameManager.LoginRequest>();
 
+            // Check this later
+            /*
             Player player = GameFlow.Get().GetPlayerFromConnectionId(message.conn.connectionId);
             if (player.m_connectionId != message.conn.connectionId)
             {
@@ -51,17 +55,33 @@ namespace ArtemisServer
                     m_idleTurns = 0,
                     m_team = Team.Invalid
                 };
+            }*/
+            foreach (ActorData playerActor in GameFlowData.Get().GetAllActorsForPlayer(loginRequest.PlayerId))
+            {
+                NetworkServer.AddPlayerForConnection(message.conn, playerActor.gameObject, 0);
             }
+
+            GameManager.LoginResponse loginResponse = new GameManager.LoginResponse()
+            {
+                Reconnecting = false,
+                Success = true,
+                LastReceivedMsgSeqNum = message.conn.lastMessageIncomingSeqNum
+            };
+
+            message.conn.Send((short)MyMsgType.LoginResponse, loginResponse);
         }
 
         private static void HandleAssetsLoadedNotification(NetworkMessage message)
         {
-            GameManager.AssetsLoadedNotification loginRequest = message.ReadMessage<GameManager.AssetsLoadedNotification>();
+            Log.Info("ASSETSLOADED");
+            GameManager.AssetsLoadedNotification loadedNotification = message.ReadMessage<GameManager.AssetsLoadedNotification>();
         }
 
         private static void HandleAssetsLoadinProgressUpdate(NetworkMessage message)
         {
-            GameManager.AssetsLoadingProgress loginRequest = message.ReadMessage<GameManager.AssetsLoadingProgress>();
+            
+            GameManager.AssetsLoadingProgress loadingProgress = message.ReadMessage<GameManager.AssetsLoadingProgress>();
+            Log.Info("LOADINGPROGRESS -> " + loadingProgress.TotalLoadingProgress);
         }
 
 
