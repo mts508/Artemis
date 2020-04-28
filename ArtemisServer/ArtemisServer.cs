@@ -88,7 +88,6 @@ namespace Artemis
 
         public void DumpSceneObjects()
         {
-            return; // #
             Scene scene = SceneManager.GetActiveScene();
             Log.Info("DumpSceneObjects");
             foreach (GameObject gameObject in scene.GetRootGameObjects())
@@ -148,16 +147,28 @@ namespace Artemis
                 {
                     Log.Info($"Activating scene object '{sceneObject.name}'");
                     sceneObject.SetActive(true);
+                    NetworkServer.Spawn(sceneObject);
                 }
             }
 
+            // Disable VisualsLoader so we dont go to the enviroment scene
+            VisualsLoader.Get().enabled = false;
+
+            bool destroyVisualsLoader = false;
+            if (destroyVisualsLoader)
+            {
+                GameObject visualsLoader = GameObject.Find("VisualsLoader");
+                if (visualsLoader != null)
+                {
+                    Log.Info("Trying to destroy VisualsLoader");
+                    GameObject.Destroy(visualsLoader);
+                }
+            }
+            
             var board = Board.Get();
 
-            
-
-
             // Avoid creating characters two times because OnSceneLoaded() gets called two times because VisualsLoader changes the current scene...
-            if (!IsMapLoaded) 
+            if (!IsMapLoaded)
             {
                 List<LobbyPlayerInfo> playerInfoList = GameManager.Get().TeamInfo.TeamPlayerInfo;
                 IsMapLoaded = true;
@@ -167,6 +178,7 @@ namespace Artemis
                     AddCharacterActor(playerInfo);
                 }
 
+                // Show what objects are present in the current scene
                 DumpSceneObjects();
             }
         }
