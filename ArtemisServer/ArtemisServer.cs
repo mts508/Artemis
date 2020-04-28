@@ -47,7 +47,10 @@ namespace Artemis
                 if (prefab.name == "HighlightUtilsSingleton")
                 {
                     highlightUtilsPrefab = prefab;
-                    break;
+                }
+                else
+                {
+                    GameObject.Destroy(prefab);
                 }
             }
             //GameObject.Destroy(prefabInstantiator);
