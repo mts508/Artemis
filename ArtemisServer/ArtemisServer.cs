@@ -37,6 +37,14 @@ namespace Artemis
             // Load map bundle
             AssetBundle MapsBundle = AssetBundle.LoadFromFile(Path.Combine(Application.dataPath, @"Bundles\scenes\maps.bundle"));
 
+            foreach (Scene sn in SceneManager.GetAllScenes()) {
+                Log.Info(sn.name);
+            }
+
+            GameObject artemisServerObject = new GameObject("ArtemisServerComponent");
+            artemisServerObject.AddComponent<ArtemisServerComponent>();
+            GameObject.DontDestroyOnLoad(artemisServerObject);
+
             WebsocketManager.Init();
 
             // to keep highlight utils for now
@@ -87,44 +95,6 @@ namespace Artemis
             actorData.UpdateDisplayName(playerInfo.Handle);
             actorData.PlayerIndex = playerInfo.PlayerId;
 
-        }
-
-        public void DumpSceneObjects()
-        {
-            Scene scene = SceneManager.GetActiveScene();
-            Log.Info("DumpSceneObjects");
-            foreach (GameObject gameObject in scene.GetRootGameObjects())
-            {
-                DumpGameObject(gameObject);
-            }
-        }
-
-        public void DumpGameObject(GameObject gameObject, int deep = 0)
-        {
-            
-            string indentation = "+ ";
-            for (int i = 0; i < deep; i++) { indentation += "  "; }
-            //Log.Info(indentation + "DumpGameObject, deep=" + deep);
-            Log.Info(indentation + gameObject.name + " " + gameObject.GetType());
-
-            foreach (var component in gameObject.GetComponents<MonoBehaviour>())
-            {
-                DumpComponent(component, deep+1);
-            }
-
-            foreach (var obj in gameObject.GetComponents<GameObject>())
-            {
-                DumpGameObject(obj, deep + 1);
-            }
-        }
-        private void DumpComponent(MonoBehaviour component, int deep)
-        {
-            if (component == null) return;
-
-            string indentation = "- ";
-            for (int i = 0; i < deep; i++) { indentation += "  "; }
-            //Log.Info(indentation + "DumpComponent, deep=" + deep);
-            Log.Info(indentation + component.name + " " + component.GetType());
         }
 
         private void LoadMap()
@@ -182,7 +152,7 @@ namespace Artemis
                 }
 
                 // Show what objects are present in the current scene
-                DumpSceneObjects();
+                UnityUtils.DumpSceneObjects();
             }
         }
 
