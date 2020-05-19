@@ -37,15 +37,10 @@ namespace ArtemisServer
             Log.Info("LOGIN REQUEST");
             GameManager.LoginRequest loginRequest = message.ReadMessage<GameManager.LoginRequest>();
 
-            // Check this later
-            /*
             Player player = GameFlow.Get().GetPlayerFromConnectionId(message.conn.connectionId);
             if (player.m_connectionId != message.conn.connectionId)
             {
-                player.m_connectionId = message.conn.connectionId;
-                player.m_accountId = Convert.ToInt64(loginRequest.AccountId);
-                player.m_valid = true;
-                player.m_id = 0; // 0 because i dont know what it does
+                player = new Player(message.conn, Convert.ToInt64(loginRequest.AccountId));  // PATCH internal -> public Player::Player
 
                 GameFlow.Get().playerDetails[player] = new PlayerDetails(PlayerGameAccountType.Human)
                 {
@@ -55,10 +50,6 @@ namespace ArtemisServer
                     m_idleTurns = 0,
                     m_team = Team.Invalid
                 };
-            }*/
-            foreach (ActorData playerActor in GameFlowData.Get().GetAllActorsForPlayer(loginRequest.PlayerId))
-            {
-                NetworkServer.AddPlayerForConnection(message.conn, playerActor.gameObject, 0);
             }
 
             GameManager.LoginResponse loginResponse = new GameManager.LoginResponse()
@@ -75,15 +66,25 @@ namespace ArtemisServer
         {
             Log.Info("ASSETSLOADED");
             GameManager.AssetsLoadedNotification loadedNotification = message.ReadMessage<GameManager.AssetsLoadedNotification>();
+
+            message.conn.Send(56, new GameManager.ReconnectReplayStatus { WithinReconnectReplay = true });
+            message.conn.Send(56, new GameManager.SpawningObjectsNotification
+            {
+                PlayerId = loadedNotification.PlayerId,
+                SpawnableObjectCount = 7 // NetObjects.Count
+            });
+            message.conn.Send(56, new GameManager.ReconnectReplayStatus { WithinReconnectReplay = false });
+            Artemis.ArtemisServer.Get().ClientLoaded(message.conn, loadedNotification.PlayerId);
+            
+            // TODO wait for everybody to load, not just first player
+            Artemis.ArtemisServer.Get().Launch();
         }
 
         private static void HandleAssetsLoadinProgressUpdate(NetworkMessage message)
         {
-            
             GameManager.AssetsLoadingProgress loadingProgress = message.ReadMessage<GameManager.AssetsLoadingProgress>();
             Log.Info("LOADINGPROGRESS -> " + loadingProgress.TotalLoadingProgress);
+            message.conn.SendByChannel(62, loadingProgress, message.channelId);
         }
-
-
     }
 }
