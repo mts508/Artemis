@@ -25,3 +25,5 @@ Run/obj/*
 *.sdf
 *.VC.db
 *.VC.opendb
+
+!Dependencies/*.dll
