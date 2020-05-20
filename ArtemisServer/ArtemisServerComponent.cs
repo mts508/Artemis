@@ -33,5 +33,10 @@ namespace ArtemisServer
 
             //base.StartCoroutine(AssetBundleManager.Get().LoadSceneAsync("DevEnvironmentSingletons", "frontend", LoadSceneMode.Single));
         }
+
+        public GameObject GetNetworkPrefabByName(string name)
+        {
+            return ResourceNetworkObjects[name];
+        }
     }
 }

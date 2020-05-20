@@ -15,12 +15,12 @@ namespace Artemis
     public class ArtemisServer
     {
         private static ArtemisServer instance;
-        private static GameObject highlightUtilsPrefab;
         bool IsMapLoaded;
         LobbyGameInfo GameInfo;
         LobbyTeamInfo TeamInfo;
         public static String Address = "127.0.0.1";
         public static int Port = 6061;
+        ArtemisServerComponent artemisServerComponent;
 
         public void Start()
         {
@@ -42,14 +42,19 @@ namespace Artemis
             }
 
             GameObject artemisServerObject = new GameObject("ArtemisServerComponent");
-            artemisServerObject.AddComponent<ArtemisServerComponent>();
+            artemisServerComponent = artemisServerObject.AddComponent<ArtemisServerComponent>();
             GameObject.DontDestroyOnLoad(artemisServerObject);
 
             WebsocketManager.Init();
+            ClientGamePrefabInstantiatorFix();
+        }
 
+        private void ClientGamePrefabInstantiatorFix()
+        {
             // to keep highlight utils for now
+            GameObject highlightUtilsPrefab = null;
             ClientGamePrefabInstantiator prefabInstantiator = ClientGamePrefabInstantiator.Get();
-            foreach(var prefab in prefabInstantiator.m_prefabs)
+            foreach (var prefab in prefabInstantiator.m_prefabs)
             {
                 Log.Info($"client prefab: {prefab.name}");
                 if (prefab.name == "HighlightUtilsSingleton")
@@ -61,7 +66,14 @@ namespace Artemis
                     GameObject.Destroy(prefab);
                 }
             }
-            //GameObject.Destroy(prefabInstantiator);
+            if (highlightUtilsPrefab != null)
+            {
+                prefabInstantiator.m_prefabs = new GameObject[] { highlightUtilsPrefab };
+            }
+            else
+            {
+                prefabInstantiator.m_prefabs = null;  // just in case
+            }
         }
 
         public void Reset()
@@ -84,6 +96,8 @@ namespace Artemis
             Log.Info($"Add Character {characterResourcePath} for player {playerInfo.Handle}");
 
             GameObject prefab = Resources.Load<GameObject>(characterResourcePath);
+
+            GameObject atsd = SpawnObject("ActorTeamSensitiveData_Friendly", false);
             GameObject character = GameObject.Instantiate(prefab);
 
             ActorData actorData = character.GetComponent<ActorData>();
@@ -94,7 +108,9 @@ namespace Artemis
             actorData.SetTeam(playerInfo.TeamId);
             actorData.UpdateDisplayName(playerInfo.Handle);
             actorData.PlayerIndex = playerInfo.PlayerId;
-
+            actorData.SetClientFriendlyTeamSensitiveData(atsd.GetComponent<ActorTeamSensitiveData>());
+            NetworkServer.Spawn(atsd);
+            NetworkServer.Spawn(character);
         }
 
         private void LoadMap()
@@ -104,15 +120,70 @@ namespace Artemis
             SceneManager.LoadScene(map, LoadSceneMode.Single);
         }
 
+        private GameObject SpawnObject(string name, bool network = true)
+        {
+            Log.Info($"Spawning {name}");
+            GameObject prefab = artemisServerComponent.GetNetworkPrefabByName(name);
+
+            if (prefab == null)
+            {
+                Log.Error($"Not found: {name}");
+                return null;
+            }
+
+            Log.Info($"Prefab {name}");
+            UnityUtils.DumpGameObject(prefab);
+
+            GameObject obj = GameObject.Instantiate(prefab);
+            Log.Info($"Instantiated {name}");
+            if (network)
+            {
+                NetworkServer.Spawn(obj);
+                Log.Info($"Network spawned {name}");
+            }
+            return obj;
+        }
+
         public void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            Log.Info("Loaded scene map: " + SceneManager.GetActiveScene().name);
-            UIFrontendLoadingScreen.Get().StartDisplayError("Map loaded");
-            
-            GameObject.Instantiate(Artemis.ArtemisServer.highlightUtilsPrefab);
+            Log.Info($"Loaded scene map ({mode}): {scene.name}");
+            UIFrontendLoadingScreen.Get().StartDisplayError($"{scene.name} loaded");
 
+            // Disable VisualsLoader so we dont go to the enviroment scene
+            if (VisualsLoader.Get() != null)
+            {
+                VisualsLoader.Get().enabled = false;  // Breaks client UI (at least) if not disabled
+            }
+
+            // Avoid creating characters two times because OnSceneLoaded() gets called two times because VisualsLoader changes the current scene...
+            if (this.IsMapLoaded)
+            {
+                Log.Error("Exiting on scene loaded, already loaded");
+                return;
+            }
+            IsMapLoaded = true;
+            InitializeGame(scene);
+        }
+
+        private void InitializeGame(Scene scene)
+        {
             GameManager.Get().SetTeamInfo(TeamInfo);
             GameManager.Get().SetGameInfo(GameInfo);
+
+            SpawnObject("ApplicationSingletonsNetId");
+            var gameSceneSingletons = SpawnObject("GameSceneSingletons");
+            var cameraMan = gameSceneSingletons.GetComponent<CameraManager>();
+            if (cameraMan != null)
+            {
+                GameObject.Destroy(cameraMan);
+            }
+            else
+            {
+                Log.Info("CameraManager is null");
+            }
+            var SharedEffectBarrierManager = SpawnObject("SharedEffectBarrierManager");
+            var SharedActionBuffer = SpawnObject("SharedActionBuffer");
+            SharedActionBuffer.GetComponent<SharedActionBuffer>().Networkm_actionPhase = ActionBufferPhase.Done;
 
             foreach (GameObject sceneObject in scene.GetRootGameObjects())
             {
@@ -124,9 +195,6 @@ namespace Artemis
                 }
             }
 
-            // Disable VisualsLoader so we dont go to the enviroment scene
-            VisualsLoader.Get().enabled = false;
-
             bool destroyVisualsLoader = false;
             if (destroyVisualsLoader)
             {
@@ -137,23 +205,57 @@ namespace Artemis
                     GameObject.Destroy(visualsLoader);
                 }
             }
-            
-            var board = Board.Get();
 
-            // Avoid creating characters two times because OnSceneLoaded() gets called two times because VisualsLoader changes the current scene...
-            if (!IsMapLoaded)
+            Log.Info("Board is " + Board.Get());
+
+            List<LobbyPlayerInfo> playerInfoList = GameManager.Get().TeamInfo.TeamPlayerInfo;
+            IsMapLoaded = true;
+            for (int i = 0; i < playerInfoList.Count; i++)
             {
-                List<LobbyPlayerInfo> playerInfoList = GameManager.Get().TeamInfo.TeamPlayerInfo;
-                IsMapLoaded = true;
-                for (int i = 0; i < playerInfoList.Count; i++)
-                {
-                    LobbyPlayerInfo playerInfo = playerInfoList[i];
-                    AddCharacterActor(playerInfo);
-                }
-
-                // Show what objects are present in the current scene
-                UnityUtils.DumpSceneObjects();
+                LobbyPlayerInfo playerInfo = playerInfoList[i];
+                AddCharacterActor(playerInfo);
             }
+
+            // Show what objects are present in the current scene
+            UnityUtils.DumpSceneObjects();
+        }
+
+        public static ArtemisServer Get() { return instance; }
+
+        public void ClientLoaded(NetworkConnection connection, int playerIndex)
+        {
+            Player player = GameFlow.Get().GetPlayerFromConnectionId(connection.connectionId);
+            foreach (ActorData playerActor in GameFlowData.Get().GetAllActorsForPlayer(playerIndex))
+            {
+                GameObject character = playerActor.gameObject;
+                character.GetComponent<PlayerData>().m_player = player;  // PATCH internal -> public PlayerData::m_player
+                Log.Info($"Registered player with account id {player.m_accountId} as player {playerIndex} ({character.name})");
+                NetworkServer.AddPlayerForConnection(connection, character, 0);
+            }
+        }
+
+        public void Launch()
+        {
+            foreach (NetworkIdentity networkIdentity in NetworkServer.objects.Values)
+            {
+                Log.Info($"Network idenity: '{networkIdentity.name}' [{networkIdentity.connectionToClient?.connectionId}] {networkIdentity.observers.Count} observers");
+            }
+
+            GameFlowData.Get().enabled = true;
+            GameFlowData.Get().Networkm_gameState = GameState.StartingGame;
+            GameFlowData.Get().Networkm_gameState = GameState.Deployment;
+            GameFlowData.Get().Networkm_gameState = GameState.BothTeams_Decision;
+            GameFlowData.Get().Networkm_willEnterTimebankMode = false;
+            GameFlowData.Get().Networkm_timeRemainingInDecisionOverflow = 10;
+
+            foreach (var actor in GameFlowData.Get().GetActors())
+            {
+                var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+                turnSm.CallRpcTurnMessage((int)TurnMessage.TURN_START, 0);
+                //actor.MoveFromBoardSquare = actor.TeamSensitiveData_authority.MoveFromBoardSquare;
+                //UpdatePlayerMovement(player);
+            }
+            //BarrierManager.Get().CallRpcUpdateBarriers();
         }
 
         public static void SetGameInfo(LobbyGameInfo gameInfo)
