@@ -89,18 +89,17 @@ namespace Artemis
 
         public void AddCharacterActor(LobbyPlayerInfo playerInfo)
         {
-            string characterResourcePath = playerInfo.CharacterType.ToString();
-            if (playerInfo.CharacterType == CharacterType.PunchingDummy) // PunchingDummy has a _ in its resource name...
-                characterResourcePath = "Punching_Dummy";
+            CharacterResourceLink resourceLink = GameWideData.Get().GetCharacterResourceLink(playerInfo.CharacterType);
 
-            Log.Info($"Add Character {characterResourcePath} for player {playerInfo.Handle}");
-
-            GameObject prefab = Resources.Load<GameObject>(characterResourcePath);
+            Log.Info($"Add Character {resourceLink.GetDisplayName()} for player {playerInfo.Handle}");
 
             GameObject atsd = SpawnObject("ActorTeamSensitiveData_Friendly", false);
-            GameObject character = GameObject.Instantiate(prefab);
+            GameObject character = GameObject.Instantiate(resourceLink.ActorDataPrefab);
 
             ActorData actorData = character.GetComponent<ActorData>();
+
+            actorData.SetupAbilityMods(playerInfo.CharacterInfo.CharacterMods); //#
+
             actorData.PlayerIndex = playerInfo.PlayerId;
             PlayerData playerData = character.GetComponent<PlayerData>();
             playerData.PlayerIndex = playerInfo.PlayerId;
