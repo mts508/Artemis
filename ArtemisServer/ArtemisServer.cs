@@ -1,5 +1,6 @@
 using ArtemisServer;
 using ArtemisServer.BridgeServer;
+using ArtemisServer.GameServer;
 using ArtemisServer.Map;
 using System;
 using System.Collections;
@@ -93,23 +94,26 @@ namespace Artemis
 
             Log.Info($"Add Character {resourceLink.GetDisplayName()} for player {playerInfo.Handle}");
 
-            GameObject atsd = SpawnObject("ActorTeamSensitiveData_Friendly", false);
+            GameObject atsdObject = SpawnObject("ActorTeamSensitiveData_Friendly", false);
             GameObject character = GameObject.Instantiate(resourceLink.ActorDataPrefab);
 
             ActorData actorData = character.GetComponent<ActorData>();
-
+            ActorTeamSensitiveData atsd = atsdObject.GetComponent<ActorTeamSensitiveData>();
             actorData.SetupAbilityMods(playerInfo.CharacterInfo.CharacterMods); //#
-
             actorData.PlayerIndex = playerInfo.PlayerId;
+            actorData.ActorIndex = playerInfo.PlayerId;
+            atsd.SetActorIndex(actorData.ActorIndex); // PATCH private -> public ActorTeamSensitiveData.SetActorIndex
             PlayerData playerData = character.GetComponent<PlayerData>();
             playerData.PlayerIndex = playerInfo.PlayerId;
             
             actorData.SetTeam(playerInfo.TeamId);
             actorData.UpdateDisplayName(playerInfo.Handle);
-            actorData.PlayerIndex = playerInfo.PlayerId;
-            actorData.SetClientFriendlyTeamSensitiveData(atsd.GetComponent<ActorTeamSensitiveData>());
-            NetworkServer.Spawn(atsd);
+            actorData.SetClientFriendlyTeamSensitiveData(atsd);
+            NetworkServer.Spawn(atsdObject);
             NetworkServer.Spawn(character);
+            // For some reason, when you spawn atsd first, you see enemy characters, and when you spawn character first, you don't
+            // They get lost because enemies are not YET registered in GameFlowData actors when TeamSensitiveDataMatchmaker.SetTeamSensitiveDataForUnhandledActors is called
+            // TODO add hostile atsds and connect friendly/hostile ones to respective clients (Patch in ATSD.OnCheck/RebuildObservers) 
         }
 
         private void LoadMap()
@@ -237,24 +241,11 @@ namespace Artemis
         {
             foreach (NetworkIdentity networkIdentity in NetworkServer.objects.Values)
             {
-                Log.Info($"Network idenity: '{networkIdentity.name}' [{networkIdentity.connectionToClient?.connectionId}] {networkIdentity.observers.Count} observers");
+                Log.Info($"Network identity: '{networkIdentity.name}' [{networkIdentity.connectionToClient?.connectionId}] {networkIdentity.observers.Count} observers");
             }
 
-            GameFlowData.Get().enabled = true;
-            GameFlowData.Get().Networkm_gameState = GameState.StartingGame;
-            GameFlowData.Get().Networkm_gameState = GameState.Deployment;
-            GameFlowData.Get().Networkm_gameState = GameState.BothTeams_Decision;
-            GameFlowData.Get().Networkm_willEnterTimebankMode = false;
-            GameFlowData.Get().Networkm_timeRemainingInDecisionOverflow = 10;
-
-            foreach (var actor in GameFlowData.Get().GetActors())
-            {
-                var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
-                turnSm.CallRpcTurnMessage((int)TurnMessage.TURN_START, 0);
-                //actor.MoveFromBoardSquare = actor.TeamSensitiveData_authority.MoveFromBoardSquare;
-                //UpdatePlayerMovement(player);
-            }
-            //BarrierManager.Get().CallRpcUpdateBarriers();
+            ArtemisServerGameManager gm = artemisServerComponent.gameObject.AddComponent<ArtemisServerGameManager>();
+            gm.StartGame();
         }
 
         public static void SetGameInfo(LobbyGameInfo gameInfo)
