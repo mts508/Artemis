@@ -32,16 +32,16 @@ namespace ArtemisServer.GameServer
             Log.Info("Preparing for game");
             
             //GameFlowData.Get().enabled = true;
-            yield return null;
-            GameFlowData.Get().Networkm_gameState = GameState.StartingGame;
-            yield return null;
-            GameFlowData.Get().Networkm_gameState = GameState.Deployment;
-            yield return new WaitForSeconds(7);
+            GameFlowData.Get().gameState = GameState.Deployment;
+            yield return new WaitForSeconds(5);
+            GameFlow.Get().CallRpcSetMatchTime(0);
+            GameFlowData.Get().Networkm_currentTurn = 0;
             Log.Info("Done preparing for game");
         }
 
         private IEnumerator EndGame()
         {
+            GameFlowData.Get().gameState = GameState.EndingGame;
             yield break;
         }
 
@@ -76,13 +76,19 @@ namespace ArtemisServer.GameServer
 
         private IEnumerator TurnLoop()
         {
-            Log.Info("TurnLoop");
-            yield return TurnDecision();
+            while(true)
+            {
+                Log.Info("TurnLoop");
+                yield return TurnDecision();
+                yield return new WaitForSeconds(1);
+                yield return ActionResolution();
+                yield return MovementResolution();
+            }
         }
 
         private IEnumerator TurnDecision()
         {
-            GameFlowData.Get().Networkm_gameState = GameState.BothTeams_Decision;
+            GameFlowData.Get().gameState = GameState.BothTeams_Decision;
             // TODO timebanks
             GameFlowData.Get().Networkm_willEnterTimebankMode = false;
             GameFlowData.Get().Networkm_timeRemainingInDecisionOverflow = 0;
@@ -96,11 +102,27 @@ namespace ArtemisServer.GameServer
             }
             //BarrierManager.Get().CallRpcUpdateBarriers();
 
-            while(true)
+            Log.Info("TurnDecision");
+
+            while (GameFlowData.Get().GetTimeRemainingInDecision() > 0)
             {
-                Log.Info("TurnDecision");
-                yield return new WaitForSeconds(21);
+                Log.Info($"Time remaining: {GameFlowData.Get().GetTimeRemainingInDecision()}");
+
+                GameFlowData.Get().CallRpcUpdateTimeRemaining(GameFlowData.Get().GetTimeRemainingInDecision());
+                yield return new WaitForSeconds(5);
             }
+        }
+
+        private IEnumerator ActionResolution()
+        {
+            GameFlowData.Get().gameState = GameState.BothTeams_Resolve;
+            yield return new WaitForSeconds(1);
+        }
+
+        private IEnumerator MovementResolution()
+        {
+            yield return new WaitForSeconds(1);
+            GameFlowData.Get().gameState = GameState.EndingTurn;
         }
     }
 }

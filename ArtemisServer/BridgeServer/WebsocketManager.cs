@@ -85,12 +85,16 @@ namespace ArtemisServer.BridgeServer
                     break;
                 case BridgeMessageType.Start:
                     Artemis.ArtemisServer.StartGame();
-                    ws.Send(new byte[] { (byte)BridgeMessageType.Start }); // tell the lobby server that we started successfully
                     break;
                 default:
                     Log.Error("Received unhandled ws message type: " + messageType.ToString());
                     break;
             }
+        }
+
+        public static void ReportGameReady()
+        {
+            ws.Send(new byte[] { (byte)BridgeMessageType.Start }); // tell the lobby server that we started successfully
         }
 
         private byte[] GetByteArray(string str)
