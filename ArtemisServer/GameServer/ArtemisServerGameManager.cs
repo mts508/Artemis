@@ -98,6 +98,7 @@ namespace ArtemisServer.GameServer
                 var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
                 //Log.Info($"MoveFromBoardSquare: {actor.TeamSensitiveData_authority.MoveFromBoardSquare}");
                 ArtemisServerMovementManager.Get().UpdatePlayerMovement(actor);
+                actor.GetActorMovement().UpdateSquaresCanMoveTo();
                 turnSm.CallRpcTurnMessage((int)TurnMessage.TURN_START, 0);
             }
             //BarrierManager.Get().CallRpcUpdateBarriers();
@@ -117,11 +118,30 @@ namespace ArtemisServer.GameServer
         {
             GameFlowData.Get().gameState = GameState.BothTeams_Resolve;
             yield return new WaitForSeconds(1);
+
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            {
+                var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+                //CancelAbility(player, false);  // for now, cannot resolve it anyway
+                turnSm.CallRpcTurnMessage((int)TurnMessage.CLIENTS_RESOLVED_ABILITIES, 0);
+            }
         }
 
         private IEnumerator MovementResolution()
         {
-            yield return new WaitForSeconds(1);
+            ArtemisServerMovementManager.Get().ResolveMovement();
+            yield return new WaitForSeconds(6); // TODO actor movement has duration estimation apparently
+
+
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            {
+                var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+
+                //ArtemisServerMovementManager.Get().UpdatePlayerMovement(actor, false);
+                turnSm.CallRpcTurnMessage((int)TurnMessage.MOVEMENT_RESOLVED, 0);
+                //actor.GetActorMovement().UpdateSquaresCanMoveTo();
+            }
+
             GameFlowData.Get().gameState = GameState.EndingTurn;
         }
     }

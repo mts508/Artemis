@@ -100,13 +100,11 @@ namespace ArtemisServer.GameServer
                 return;
             }
 
+            //List<GridPos> posList = path.ToGridPosPath();
             List<GridPos> posList = new List<GridPos>();
-            BoardSquarePathInfo pathNode = path;
-            while (pathNode.next != null)
+            for (var pathNode = path; pathNode.next != null; pathNode = pathNode.next)
             {
-                posList.Add(pathNode.next.square.GetGridPosition());
-                pathNode.m_unskippable = true;  // so that aestetic path is not optimized (see CreateRunAndVaultAesteticPath)
-                pathNode = pathNode.next;
+                posList.Add(pathNode.next.square.GetGridPosition()); // TODO why doesnt path.ToGridPosPath() work?
             }
 
             actor.TeamSensitiveData_authority.MovementLine.m_positions.AddRange(posList);
@@ -115,6 +113,101 @@ namespace ArtemisServer.GameServer
 
             UpdatePlayerMovement(actor);
             actorTurnSM.CallRpcTurnMessage((int)TurnMessage.MOVEMENT_ACCEPTED, 0);
+        }
+
+        public void ResolveMovement()
+        {
+            Dictionary<int, BoardSquarePathInfo> paths = new Dictionary<int, BoardSquarePathInfo>();
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            {
+                paths.Add(actor.ActorIndex, ResolveMovement(actor));
+            }
+
+            // TODO merge paths (clashes, etc.)
+
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            {
+                BoardSquarePathInfo start = paths[actor.ActorIndex];
+                BoardSquarePathInfo end = start;
+                while (end.next != null) end = end.next;
+
+                ActorTeamSensitiveData atsd = actor.TeamSensitiveData_authority;
+
+                // TODO GetPathEndpoint everywhere
+
+                // TODO movement camera bounds
+                actor.MoveFromBoardSquare = end.square;
+                actor.InitialMoveStartSquare = end.square;
+
+                atsd.CallRpcMovement(
+                     GameEventManager.EventType.Invalid,
+                     GridPosProp.FromGridPos(start.square.GetGridPosition()),
+                     GridPosProp.FromGridPos(end.square.GetGridPosition()),
+                     MovementUtils.SerializePath(start),
+                     ActorData.MovementType.Normal,
+                     false,
+                     false);
+
+                atsd.MovementLine?.m_positions.Clear();
+            }
+            Log.Info("Movement resolved");
+        }
+
+        private BoardSquarePathInfo ResolveMovement(ActorData actor)
+        {
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+            ActorController actorController = actor.gameObject.GetComponent<ActorController>();
+            AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
+            ActorTeamSensitiveData atsd = actor.TeamSensitiveData_authority;
+            ActorMovement actorMovement = actor.GetActorMovement();
+
+            BoardSquare start = actor.InitialMoveStartSquare;
+            BoardSquare end = actor.MoveFromBoardSquare;
+
+            GridPosProp startPosProp = GridPosProp.FromGridPos(start.GetGridPosition());
+            GridPosProp endPosProp = GridPosProp.FromGridPos(end.GetGridPosition());
+
+            BoardSquarePathInfo path;
+            if (atsd.MovementLine != null)
+            {
+                // TODO refactor this atrocity
+                path = actorMovement.BuildPathTo(start, start);
+                BoardSquarePathInfo node = path;
+                foreach (var curPos in atsd.MovementLine.m_positions)
+                {
+                    node.next = actorMovement.BuildPathTo(node.square, Board.Get().GetSquare(curPos)).next;
+                    if (node.next == null)
+                    {
+                        continue;
+                    }
+                    node.next.moveCost += node.moveCost;
+                    node = node.next;
+                }
+            }
+            else
+            {
+                path = actorMovement.BuildPathTo(start, end);
+            }
+
+            if (path == null)
+            {
+                path = actorMovement.BuildPathTo(start, start);
+            }
+
+            for (var pathNode = path; pathNode.next != null; pathNode = pathNode.next)
+            {
+                pathNode.m_unskippable = true;  // so that aestetic path is not optimized (see CreateRunAndVaultAesteticPath)
+            }
+
+            var path2 = path;
+            while (path2.next != null)
+            {
+                Log.Info($"FINAL PATH {path2.square.GetGridPosition()}");
+                path2 = path2.next;
+            }
+            Log.Info($"FINAL PATH {path2.square.GetGridPosition()}");
+
+            return path;
         }
 
         protected virtual void Awake()
