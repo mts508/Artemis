@@ -49,8 +49,8 @@ namespace ArtemisServer.GameServer
         {
             // TODO
             Log.Info("Placing characters");
-            int x = 6;
-            int y = 5;
+            int x = 18;
+            int y = 9;
             foreach (var player in GameFlowData.Get().GetPlayers())
             {
                 //UnityUtils.DumpGameObject(player);
@@ -59,7 +59,7 @@ namespace ArtemisServer.GameServer
                 var atsd = actorData.TeamSensitiveData_authority;
                 if (atsd == null) continue;
 
-                BoardSquare start = Board.Get().GetSquareBoardAtPosition(x++, y);
+                BoardSquare start = Board.Get().GetSquare(x++, y);
                 GridPosProp startProp = GridPosProp.FromGridPos(start.GetGridPosition());
 
                 atsd.CallRpcMovement(GameEventManager.EventType.Invalid,
@@ -68,7 +68,7 @@ namespace ArtemisServer.GameServer
 
                 actorData.ServerLastKnownPosSquare = start;
                 actorData.InitialMoveStartSquare = start;
-                atsd.MoveFromBoardSquare = start;
+                actorData.MoveFromBoardSquare = start;
                 Log.Info($"Placing {actorData.DisplayName} at {startProp.m_x}, {startProp.m_y}");  // PATCH internal -> public ActorData.DisplayName
             }
             Log.Info("Done placing characters");
@@ -93,12 +93,12 @@ namespace ArtemisServer.GameServer
             GameFlowData.Get().Networkm_willEnterTimebankMode = false;
             GameFlowData.Get().Networkm_timeRemainingInDecisionOverflow = 0;
 
-            foreach (var actor in GameFlowData.Get().GetActors())
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
             {
                 var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+                //Log.Info($"MoveFromBoardSquare: {actor.TeamSensitiveData_authority.MoveFromBoardSquare}");
+                ArtemisServerMovementManager.Get().UpdatePlayerMovement(actor);
                 turnSm.CallRpcTurnMessage((int)TurnMessage.TURN_START, 0);
-                //actor.MoveFromBoardSquare = actor.TeamSensitiveData_authority.MoveFromBoardSquare;
-                //UpdatePlayerMovement(player);
             }
             //BarrierManager.Get().CallRpcUpdateBarriers();
 
@@ -109,7 +109,7 @@ namespace ArtemisServer.GameServer
                 Log.Info($"Time remaining: {GameFlowData.Get().GetTimeRemainingInDecision()}");
 
                 GameFlowData.Get().CallRpcUpdateTimeRemaining(GameFlowData.Get().GetTimeRemainingInDecision());
-                yield return new WaitForSeconds(5);
+                yield return new WaitForSeconds(2);
             }
         }
 
