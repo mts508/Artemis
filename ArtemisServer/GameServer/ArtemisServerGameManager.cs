@@ -124,7 +124,7 @@ namespace ArtemisServer.GameServer
             foreach (ActorData actor in GameFlowData.Get().GetActors())
             {
                 var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
-                //CancelAbility(player, false);  // for now, cannot resolve it anyway
+                CancelAbility(actor, false);  // for now, cannot resolve it anyway
                 turnSm.CallRpcTurnMessage((int)TurnMessage.CLIENTS_RESOLVED_ABILITIES, 0);
             }
         }
@@ -147,11 +147,54 @@ namespace ArtemisServer.GameServer
             GameFlowData.Get().gameState = GameState.EndingTurn;
         }
 
+        private void CmdGUITurnMessage(ActorTurnSM actorTurnSM, int msgEnum, int extraData)
+        {
+            ActorData actor = actorTurnSM.gameObject.GetComponent<ActorData>();
+            TurnMessage msg = (TurnMessage)msgEnum;
+
+            if (!GameFlowData.Get().IsInDecisionState())
+            {
+                Log.Info($"Recieved CmdGuiTurnMessage not in desicion state! {actor.DisplayName} {msg} ({extraData})");
+                return;
+            }
+
+            Log.Info($"CmdGuiTurnMessage {actor.DisplayName} {msg} ({extraData})");
+            if (msg == TurnMessage.CANCEL_BUTTON_CLICKED)
+            {
+                CancelAbility(actor);
+            }
+            else if (msg == TurnMessage.DONE_BUTTON_CLICKED)
+            {
+                actorTurnSM.CallRpcTurnMessage((int)TurnMessage.DONE_BUTTON_CLICKED, 0);
+            }
+            // TODO Timebanks. Notice that client sends CANCEL msg when selecting ability after confirmed
+            // (but we still should have a fallback if it doesn't) but doesn't send one when updating movement.
+        }
+
+        public void CancelAbility(ActorData actor, bool sendMessage = true)
+        {
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+
+            turnSm.ClearAbilityTargets();
+            actor.TeamSensitiveData_authority.SetAbilityRequestData(new List<ActorTargeting.AbilityRequestData>());
+            ArtemisServerMovementManager.Get().UpdatePlayerMovement(actor);
+            if (sendMessage)
+            {
+                turnSm.CallRpcTurnMessage((int)TurnMessage.CANCEL_BUTTON_CLICKED, 0);
+            }
+        }
+
         protected virtual void Awake()
         {
             if (instance == null)
             {
                 instance = this;
+            }
+
+            foreach (var player in GameFlowData.Get().GetPlayers())
+            {
+                ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
+                actorTurnSM.OnCmdGUITurnMessageCallback += CmdGUITurnMessage;
             }
         }
 
@@ -160,6 +203,11 @@ namespace ArtemisServer.GameServer
             if (instance == this)
             {
                 instance = null;
+            }
+            foreach (var player in GameFlowData.Get().GetPlayers())
+            {
+                ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
+                actorTurnSM.OnCmdGUITurnMessageCallback -= CmdGUITurnMessage;
             }
         }
 
