@@ -42,6 +42,7 @@ namespace ArtemisServer.GameServer
 
             actor.m_postAbilityHorizontalMovement = actorMovement.GetAdjustedMovementFromBuffAndDebuff(4, true);  // TODO Get default movement ranges
             actor.m_maxHorizontalMovement = actorMovement.GetAdjustedMovementFromBuffAndDebuff(8, false);
+            // TODO check AbilityData.GetQueuedAbilitiesAllowMovement/Sprinting etc
 
             actor.RemainingHorizontalMovement = (abilitySet ? actor.m_postAbilityHorizontalMovement : actor.m_maxHorizontalMovement) - movementCost;
             actor.RemainingMovementWithQueuedAbility = actor.m_postAbilityHorizontalMovement - movementCost;
@@ -63,6 +64,14 @@ namespace ArtemisServer.GameServer
         private void CmdSetSquare(ActorTurnSM actorTurnSM, int x, int y, bool setWaypoint)
         {
             ActorData actor = actorTurnSM.gameObject.GetComponent<ActorData>();
+
+            if (!GameFlowData.Get().IsInDecisionState())
+            {
+                Log.Info($"Recieved CmdSetSquare not in desicion state! {actor.DisplayName} [{x}, {y}] (setWaypoint = {setWaypoint})");
+                actorTurnSM.CallRpcTurnMessage((int)TurnMessage.MOVEMENT_REJECTED, 0);
+                return;
+            }
+
             Log.Info($"CmdSetSquare {actor.DisplayName} [{x}, {y}] (setWaypoint = {setWaypoint})");
 
             BoardSquare boardSquare = Board.Get().GetSquare(x, y);
@@ -181,6 +190,7 @@ namespace ArtemisServer.GameServer
                         continue;
                     }
                     node.next.moveCost += node.moveCost;
+                    node.next.prev = node;
                     node = node.next;
                 }
             }

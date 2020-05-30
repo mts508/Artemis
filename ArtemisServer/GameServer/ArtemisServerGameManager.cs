@@ -8,6 +8,8 @@ namespace ArtemisServer.GameServer
 {
     class ArtemisServerGameManager : MonoBehaviour
     {
+        private static ArtemisServerGameManager instance = null;
+
         public void StartGame()
         {
             Log.Info("ArtemisServerGameManager.StartGame");
@@ -130,7 +132,7 @@ namespace ArtemisServer.GameServer
         private IEnumerator MovementResolution()
         {
             ArtemisServerMovementManager.Get().ResolveMovement();
-            yield return new WaitForSeconds(6); // TODO actor movement has duration estimation apparently
+            yield return new WaitForSeconds(6); // TODO ActorMovement.CalculateMoveTimeout() -- do we need some server version of ProcessMovement?
 
 
             foreach (ActorData actor in GameFlowData.Get().GetActors())
@@ -143,6 +145,27 @@ namespace ArtemisServer.GameServer
             }
 
             GameFlowData.Get().gameState = GameState.EndingTurn;
+        }
+
+        protected virtual void Awake()
+        {
+            if (instance == null)
+            {
+                instance = this;
+            }
+        }
+
+        protected virtual void OnDestroy()
+        {
+            if (instance == this)
+            {
+                instance = null;
+            }
+        }
+
+        public static ArtemisServerGameManager Get()
+        {
+            return instance;
         }
     }
 }
