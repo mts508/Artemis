@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ArtemisServer.GameServer;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,6 +25,8 @@ namespace ArtemisServer
             // AssetsLoadingProgress
             NetworkServer.RegisterHandler((short)MyMsgType.ClientAssetsLoadingProgressUpdate, new NetworkMessageDelegate(HandleAssetsLoadinProgressUpdate));
 
+
+            NetworkServer.RegisterHandler((short)MyMsgType.CastAbility, new NetworkMessageDelegate(HandleCastAbility));
         }
 
         private static void HandleAddPlayer(NetworkMessage message)
@@ -34,12 +37,14 @@ namespace ArtemisServer
 
         private static void HandleLoginRequest(NetworkMessage message)
         {
+            // TODO client will send login request again in case of connection timeout
             Log.Info("LOGIN REQUEST");
             GameManager.LoginRequest loginRequest = message.ReadMessage<GameManager.LoginRequest>();
 
             Player player = GameFlow.Get().GetPlayerFromConnectionId(message.conn.connectionId);
             if (player.m_connectionId != message.conn.connectionId)
             {
+                Log.Info($"New player AccountID:{loginRequest.AccountId} PlayerId:{loginRequest.PlayerId} SessionToken:{loginRequest.SessionToken}");
                 player = new Player(message.conn, Convert.ToInt64(loginRequest.AccountId));  // PATCH internal -> public Player::Player
 
                 GameFlow.Get().playerDetails[player] = new PlayerDetails(PlayerGameAccountType.Human)
@@ -50,6 +55,7 @@ namespace ArtemisServer
                     m_idleTurns = 0,
                     m_team = Team.Invalid
                 };
+                Log.Info($"Registered AccountID:{player.m_accountId}");
             }
 
             GameManager.LoginResponse loginResponse = new GameManager.LoginResponse()
@@ -85,6 +91,42 @@ namespace ArtemisServer
             GameManager.AssetsLoadingProgress loadingProgress = message.ReadMessage<GameManager.AssetsLoadingProgress>();
             Log.Info("LOADINGPROGRESS -> " + loadingProgress.TotalLoadingProgress);
             message.conn.SendByChannel(62, loadingProgress, message.channelId);
+        }
+
+        private static void HandleCastAbility(NetworkMessage message)
+        {
+            CastAbility castAbility = message.ReadMessage<CastAbility>();
+            Log.Info($"CASTABILITY -> caster: {castAbility.CasterIndex}, action: {castAbility.ActionType}, {castAbility.Targets.Count} targets");
+            ArtemisServerGameManager gameManager = ArtemisServerGameManager.Get();
+            if (gameManager == null)
+            {
+                Log.Info($"CASTABILITY ignored");
+            }
+            else
+            {
+                gameManager.OnCastAbility(message.conn, castAbility.CasterIndex, castAbility.ActionType, castAbility.Targets);
+            }
+        }
+
+        public class CastAbility : MessageBase
+        {
+            public int CasterIndex;
+            public int ActionType;
+            public List<AbilityTarget> Targets;
+
+            public override void Serialize(NetworkWriter writer)
+            {
+                writer.Write(CasterIndex);
+                writer.Write(ActionType);
+                AbilityTarget.SerializeAbilityTargetList(Targets, writer);
+            }
+
+            public override void Deserialize(NetworkReader reader)
+            {
+                this.CasterIndex = reader.ReadInt32();
+                this.ActionType = reader.ReadInt32();
+                this.Targets = AbilityTarget.DeSerializeAbilityTargetList(reader);
+            }
         }
     }
 }

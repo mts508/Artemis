@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace ArtemisServer.GameServer
 {
@@ -32,7 +33,7 @@ namespace ArtemisServer.GameServer
         private IEnumerator PrepareForGame()
         {
             Log.Info("Preparing for game");
-            
+
             //GameFlowData.Get().enabled = true;
             GameFlowData.Get().gameState = GameState.Deployment;
             yield return new WaitForSeconds(5);
@@ -161,14 +162,90 @@ namespace ArtemisServer.GameServer
             Log.Info($"CmdGuiTurnMessage {actor.DisplayName} {msg} ({extraData})");
             if (msg == TurnMessage.CANCEL_BUTTON_CLICKED)
             {
-                CancelAbility(actor);
+                // TODO distinguish CANCEL button and ability cancelling
+                // actor.TeamSensitiveData_authority.SetToggledAction(actionType, false);
+                // if (DONE) make undone
+                // else if (targeting action) set toggled action(false)
+                actorTurnSM.CallRpcTurnMessage((int)TurnMessage.CANCEL_BUTTON_CLICKED, 0);
             }
             else if (msg == TurnMessage.DONE_BUTTON_CLICKED)
             {
                 actorTurnSM.CallRpcTurnMessage((int)TurnMessage.DONE_BUTTON_CLICKED, 0);
             }
-            // TODO Timebanks. Notice that client sends CANCEL msg when selecting ability after confirmed
+            // TODO: Timebanks. Notice that client sends CANCEL msg when selecting ability after confirmed
             // (but we still should have a fallback if it doesn't) but doesn't send one when updating movement.
+        }
+
+        private void CmdSelectAbilityRequest(ActorController actorController, int actionTypeInt)
+        {
+            ActorData actor = actorController.gameObject.GetComponent<ActorData>();
+            AbilityData.ActionType actionType = (AbilityData.ActionType)actionTypeInt;
+
+            if (!GameFlowData.Get().IsInDecisionState())
+            {
+                Log.Info($"Recieved CmdSelectAbilityRequest not in desicion state! {actor.DisplayName} {actionType}");
+                return;
+            }
+
+            Log.Info($"CmdSelectAbilityRequest {actor.DisplayName} {actionType}");
+
+            AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+
+            abilityData.Networkm_selectedActionForTargeting = actionType;
+            turnSm.ClearAbilityTargets();
+            actor.TeamSensitiveData_authority.SetToggledAction(actionType, true);
+        }
+
+        internal void OnCastAbility(NetworkConnection conn, int casterIndex, int actionTypeInt, List<AbilityTarget> targets)
+        {
+            Player player = GameFlow.Get().GetPlayerFromConnectionId(conn.connectionId);
+            ActorData actor = GameFlowData.Get().FindActorByActorIndex(casterIndex);
+            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+            AbilityData.ActionType actionType = (AbilityData.ActionType)actionTypeInt;
+
+            if (actor.gameObject.GetComponent<PlayerData>().m_player.m_connectionId != conn.connectionId)
+            {
+                Log.Error($"Illegal OnCastAbility: {actor.DisplayName} does not belong to player {player.m_accountId}!");
+                turnSm.CallRpcTurnMessage((int)TurnMessage.ABILITY_REQUEST_REJECTED, 0);
+                return;
+            }
+
+            Log.Info($"OnCastAbility {actor.DisplayName} {actionType} ({targets.Count} targets)");
+
+            if (!actor.QueuedMovementAllowsAbility)
+            {
+                Log.Info($"OnCastAbility {actor.DisplayName} {actionType} rejected");
+                turnSm.CallRpcTurnMessage((int)TurnMessage.ABILITY_REQUEST_REJECTED, 0);
+                return;
+            }
+
+            // TODO AbilityData.ValidateAbilityOnTarget
+            turnSm.CallRpcTurnMessage((int)TurnMessage.ABILITY_REQUEST_ACCEPTED, 0);
+
+            List<ActorTargeting.AbilityRequestData> abilityRequest;
+            Ability ability = actor.GetAbilityData().GetAbilityOfActionType(actionType);
+            if (!ability.IsFreeAction())
+            {
+                abilityRequest = new List<ActorTargeting.AbilityRequestData>();
+                // If this ability isn't free, remove previous non-free ability request, if any
+                foreach (var prevAbilityRequest in actor.TeamSensitiveData_authority.GetAbilityRequestData())
+                {
+                    if (actor.GetAbilityData().GetAbilityOfActionType(prevAbilityRequest.m_actionType).IsFreeAction())
+                    {
+                        abilityRequest.Add(prevAbilityRequest); 
+                    }
+                }
+            }
+            else
+            {
+                abilityRequest = new List<ActorTargeting.AbilityRequestData>(actor.TeamSensitiveData_authority.GetAbilityRequestData());
+            }
+
+            abilityRequest.Add(new ActorTargeting.AbilityRequestData(actionType, targets));
+            actor.TeamSensitiveData_authority.SetAbilityRequestData(abilityRequest);
+
+            ArtemisServerMovementManager.Get().UpdatePlayerMovement(actor);
         }
 
         public void CancelAbility(ActorData actor, bool sendMessage = true)
@@ -195,6 +272,8 @@ namespace ArtemisServer.GameServer
             {
                 ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
                 actorTurnSM.OnCmdGUITurnMessageCallback += CmdGUITurnMessage;
+                ActorController actorController = player.GetComponent<ActorController>();
+                actorController.OnCmdSelectAbilityRequestCallback += CmdSelectAbilityRequest;
             }
         }
 
@@ -208,6 +287,8 @@ namespace ArtemisServer.GameServer
             {
                 ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
                 actorTurnSM.OnCmdGUITurnMessageCallback -= CmdGUITurnMessage;
+                ActorController actorController = player.GetComponent<ActorController>();
+                actorController.OnCmdSelectAbilityRequestCallback -= CmdSelectAbilityRequest;
             }
         }
 

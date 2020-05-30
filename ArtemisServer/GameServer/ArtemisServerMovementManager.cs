@@ -35,10 +35,10 @@ namespace ArtemisServer.GameServer
             List<ActorTargeting.AbilityRequestData> abilityRequest = actor.TeamSensitiveData_authority.GetAbilityRequestData();
             bool abilitySet = !abilityRequest.IsNullOrEmpty() && abilityRequest[0].m_actionType != AbilityData.ActionType.INVALID_ACTION;
 
-            foreach (var a in abilityRequest)
-            {
-                Log.Info($"Ability target: {a.m_actionType} {a.m_targets}");
-            }
+            //foreach (var a in abilityRequest)
+            //{
+            //    Log.Info($"Ability target: {a.m_actionType} {a.m_targets}");
+            //}
 
             actor.m_postAbilityHorizontalMovement = actorMovement.GetAdjustedMovementFromBuffAndDebuff(4, true);  // TODO Get default movement ranges
             actor.m_maxHorizontalMovement = actorMovement.GetAdjustedMovementFromBuffAndDebuff(8, false);
