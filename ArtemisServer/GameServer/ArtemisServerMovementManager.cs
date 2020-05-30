@@ -220,10 +220,7 @@ namespace ArtemisServer.GameServer
             foreach (var player in GameFlowData.Get().GetPlayers())
             {
                 ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
-                actorTurnSM.OnCmdSetSquareCallback = delegate (int x, int y, bool setWaypoint)
-                {
-                    CmdSetSquare(actorTurnSM, x, y, setWaypoint);
-                };
+                actorTurnSM.OnCmdSetSquareCallback += CmdSetSquare;
             }
         }
 
@@ -232,6 +229,11 @@ namespace ArtemisServer.GameServer
             if (instance == this)
             {
                 instance = null;
+            }
+            foreach (var player in GameFlowData.Get().GetPlayers())
+            {
+                ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
+                actorTurnSM.OnCmdSetSquareCallback -= CmdSetSquare;
             }
         }
 
