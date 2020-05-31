@@ -3,6 +3,13 @@ TODO add older patches
 ## AbilityTarget.cs
 internal -> public [De]serializeAbilityTargetList
 
+## ActorData.cs
+public bool \u0018() -> public bool IsVisibleToClient()
+
+## CameraManager.cs
+in Update
+	if (!this.GetFlyThroughCamera().enabled) -> if (!this.GetFlyThroughCamera()?.enabled ?? false)
+
 ## CharacterResourceLink.cs
 internal -> public CharacterResourceLink.ActorDataPrefab
 

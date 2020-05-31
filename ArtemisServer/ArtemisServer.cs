@@ -200,15 +200,15 @@ namespace Artemis
 
             SpawnObject("ApplicationSingletonsNetId");
             var gameSceneSingletons = SpawnObject("GameSceneSingletons");
-            var cameraMan = gameSceneSingletons.GetComponent<CameraManager>();
-            if (cameraMan != null)
-            {
-                GameObject.Destroy(cameraMan);
-            }
-            else
-            {
-                Log.Info("CameraManager is null");
-            }
+            //var cameraMan = gameSceneSingletons.GetComponent<CameraManager>();
+            //if (cameraMan != null)
+            //{
+            //    GameObject.Destroy(cameraMan);
+            //}
+            //else
+            //{
+            //    Log.Info("CameraManager is null");
+            //}
             var SharedEffectBarrierManager = SpawnObject("SharedEffectBarrierManager");
             var SharedActionBuffer = SpawnObject("SharedActionBuffer");
             SharedActionBuffer.GetComponent<SharedActionBuffer>().Networkm_actionPhase = ActionBufferPhase.Done;
