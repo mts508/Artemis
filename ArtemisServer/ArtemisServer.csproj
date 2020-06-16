@@ -73,6 +73,7 @@
     <Compile Include="GameMessageManager.cs" />
     <Compile Include="GameServer\ArtemisServerGameManager.cs" />
     <Compile Include="GameServer\ArtemisServerMovementManager.cs" />
+    <Compile Include="GameServer\ArtemisServerResolutionManager.cs" />
     <Compile Include="Map\CommonObjectsSpawner.cs" />
     <Compile Include="Map\PlayerSpawner.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

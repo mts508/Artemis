@@ -5,6 +5,10 @@ internal -> public [De]serializeAbilityTargetList
 
 ## ActorData.cs
 public bool \u0018() -> public bool IsVisibleToClient()
+internal bool \u000E() -> public bool IsDead()
+internal -> public void SetHitPoints(int value)
+internal -> public void SetAbsorbPoints(int value)
+internal -> public get_HitPoints
 
 ## CameraManager.cs
 in Update

@@ -276,7 +276,8 @@ namespace Artemis
                 Log.Info($"Network identity: '{networkIdentity.name}' [{networkIdentity.connectionToClient?.connectionId}] {networkIdentity.observers.Count} observers");
             }
 
-           artemisServerComponent.gameObject.AddComponent<ArtemisServerMovementManager>();
+            artemisServerComponent.gameObject.AddComponent<ArtemisServerMovementManager>();
+            artemisServerComponent.gameObject.AddComponent<ArtemisServerResolutionManager>();
             ArtemisServerGameManager gm = artemisServerComponent.gameObject.AddComponent<ArtemisServerGameManager>();
             gm.StartGame();
         }
