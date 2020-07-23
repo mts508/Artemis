@@ -17,6 +17,10 @@ in Update
 ## CharacterResourceLink.cs
 internal -> public CharacterResourceLink.ActorDataPrefab
 
+## ClientAbilityResults.cs
+public static bool \u001D -> WarningEnabled
+public static bool \u000E -> DebugEnabled
+
 ## GameFlowData.cs
 internal -> public GameState gameState
 internal -> public FindActorByActorIndex
@@ -26,3 +30,9 @@ Removed error message in CheckMinHeight (Design scene file {0} is missing LOSHig
 
 ## MovementUtils.cs
 All internal methods -> public
+
+## SequenceSource.cs
+internal -> public SequenceSource(...)
+
+## TheatricsManager.cs
+internal -> public static TheatricsManager Get()
