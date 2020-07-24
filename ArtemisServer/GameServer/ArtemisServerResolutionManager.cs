@@ -2,12 +2,17 @@
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.Networking.NetworkSystem;
 
 namespace ArtemisServer.GameServer
 {
     class ArtemisServerResolutionManager : MonoBehaviour
     {
         private static ArtemisServerResolutionManager instance;
+
+        private Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActors;
+        private List<ClientResolutionAction> Actions;
 
         protected virtual void Awake()
         {
@@ -22,14 +27,57 @@ namespace ArtemisServer.GameServer
             foreach (AbilityPriority priority in Enum.GetValues(typeof(AbilityPriority))) // TODO remove invalid priorities
             {
                 Log.Info($"Resolving {priority} abilities");
+
+                // TheatricsManager.Get().m_turnToUpdate
+                // TODO TheatricManager.PlayPhase
+
+                TargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
+                Actions = new List<ClientResolutionAction>();
+
                 foreach (ActorData actor in GameFlowData.Get().GetActors())
                 {
                     GameFlowData.Get().activeOwnedActorData = actor;
                     ResolveAbilities(actor, priority);
                 }
+
+                if (Actions.Count != 0)
+                {
+                    SendToAll((short)MyMsgType.StartResolutionPhase, new StartResolutionPhase()
+                    {
+                        CurrentTurnIndex = GameFlowData.Get().CurrentTurn,
+                        CurrentAbilityPhase = priority,
+                        NumResolutionActionsThisPhase = Actions.Count
+                    });
+
+                    // TODO friendly/hostile visibility
+                    Log.Info($"Sending {Actions.Count} actions");
+                    foreach (ClientResolutionAction action in Actions)
+                    {
+                        Log.Info($"Sending action: {action.GetDebugDescription()}, Caster actor: {action.GetCaster().ActorIndex}, Action: {action.GetSourceAbilityActionType()}");
+                        SendToAll((short)MyMsgType.SingleResolutionAction, new SingleResolutionAction()
+                        {
+                            TurnIndex = GameFlowData.Get().CurrentTurn,
+                            PhaseIndex = (int)priority,
+                            Action = action
+                        });
+                    }
+
+                    // TODO process ClientResolutionManager.SendResolutionPhaseCompleted
+                }
+
+                ApplyTargets();
             }
             GameFlowData.Get().activeOwnedActorData = null;
             Log.Info("Abilities resolved");
+        }
+
+        private void SendToAll(short msgType, MessageBase msg)
+        {
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            {
+                //if (!actor.GetPlayerDetails().IsHumanControlled) { continue; }
+                actor.connectionToClient?.Send(msgType, msg);
+            }
         }
 
         public void ResolveAbilities(ActorData actor, AbilityPriority priority)
@@ -61,31 +109,35 @@ namespace ArtemisServer.GameServer
                 for (int i = 0; i < ard.m_targets.Count; ++i)
                 {
                     ability.Targeters[i].UpdateTargeting(ard.m_targets[i], actor);
+                    ability.Targeters[i].SetLastUpdateCursorState(ard.m_targets[i]);
                 }
 
-                Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> currentTargetedActors = CalculateTargetedActors(actor, ability);
+                CalculateTargetedActors(actor, ard.m_actionType, ability);
+            }
+        }
 
-                foreach (ActorData target in currentTargetedActors.Keys)
+        public void ApplyTargets()
+        {
+            foreach (ActorData target in TargetedActors.Keys)
+            {
+                foreach (AbilityTooltipSymbol symbol in TargetedActors[target].Keys)
                 {
-                    foreach (AbilityTooltipSymbol symbol in currentTargetedActors[target].Keys)
+                    int value = TargetedActors[target][symbol];
+                    Log.Info($"target {target.DisplayName} {symbol} {value}");
+                    switch (symbol)
                     {
-                        int value = currentTargetedActors[target][symbol];
-                        Log.Info($"target {target.DisplayName} {symbol} {value}");
-                        switch (symbol)
-                        {
-                            case AbilityTooltipSymbol.Damage:
-                                target.SetHitPoints(target.HitPoints - value);
-                                break;
-                        }
+                        case AbilityTooltipSymbol.Damage:
+                            target.SetHitPoints(target.HitPoints - value);
+                            break;
                     }
                 }
             }
         }
 
         // Based on ActorTargeting.CalculateTargetedActors
-        public Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> CalculateTargetedActors(ActorData instigator, Ability abilityOfActionType)
+        public void CalculateTargetedActors(ActorData instigator, AbilityData.ActionType actionType, Ability abilityOfActionType)
         {
-            Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> m_currentTargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
+            Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> currentTargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
             int num = 0;
             Log.Info($"{abilityOfActionType.Targeters.Count}/{abilityOfActionType.GetExpectedNumberOfTargeters()} targeters");
             while (num < abilityOfActionType.Targeters.Count && num < abilityOfActionType.GetExpectedNumberOfTargeters())
@@ -104,21 +156,86 @@ namespace ArtemisServer.GameServer
                         foreach (KeyValuePair<AbilityTooltipSymbol, int> keyValuePair in dictionary)
                         {
                             AbilityTooltipSymbol key = keyValuePair.Key;
-                            if (!m_currentTargetedActors.ContainsKey(actorTarget.m_actor))
+                            if (!currentTargetedActors.ContainsKey(actorTarget.m_actor))
                             {
-                                m_currentTargetedActors[actorTarget.m_actor] = new Dictionary<AbilityTooltipSymbol, int>();
+                                currentTargetedActors[actorTarget.m_actor] = new Dictionary<AbilityTooltipSymbol, int>();
                             }
-                            if (!m_currentTargetedActors[actorTarget.m_actor].ContainsKey(key))
+                            if (!currentTargetedActors[actorTarget.m_actor].ContainsKey(key))
                             {
-                                m_currentTargetedActors[actorTarget.m_actor][key] = 0;
+                                currentTargetedActors[actorTarget.m_actor][key] = 0;
                             }
-                            m_currentTargetedActors[actorTarget.m_actor][key] += keyValuePair.Value;
+                            currentTargetedActors[actorTarget.m_actor][key] += keyValuePair.Value;
                         }
                     }
                 }
                 num++;
             }
-            return m_currentTargetedActors;
+
+            foreach(var targetedActor in currentTargetedActors)
+            {
+                foreach (var symbol in targetedActor.Value)
+                {
+                    ClientActorHitResults hitResults;
+                    switch (symbol.Key)
+                    {
+                        case AbilityTooltipSymbol.Damage:
+                            hitResults = new ClientActorHitResultsBuilder()
+                                .SetDamage(symbol.Value, Vector3.zero, false, false)  // TODO
+                                .Build();
+                            Log.Info($"HitResults: damage: {symbol.Value}");
+                            break;
+                        default:
+                            hitResults = new ClientActorHitResultsBuilder().Build();
+                            break;
+                    }
+                    Actions.Add(MakeResolutionAction(
+                        instigator,
+                        actionType,
+                        abilityOfActionType,
+                        targetedActor.Key,
+                        hitResults));
+                }
+
+                TargetedActors.Add(targetedActor.Key, targetedActor.Value);
+            }
+        }
+
+        private ClientResolutionAction MakeResolutionAction(
+            ActorData instigator,
+            AbilityData.ActionType actionType,
+            Ability abilityOfActionType,
+            ActorData target,
+            ClientActorHitResults hitResults)
+        {
+            List<ServerClientUtils.SequenceStartData> seqStartDataList = new List<ServerClientUtils.SequenceStartData>()
+            {
+                MakeSequenceStart(instigator, abilityOfActionType)
+            };
+            Dictionary<ActorData, ClientActorHitResults> actorToHitResults = new Dictionary<ActorData, ClientActorHitResults>();
+            actorToHitResults.Add(target, hitResults);
+            Dictionary<Vector3, ClientPositionHitResults> posToHitResults = new Dictionary<Vector3, ClientPositionHitResults>();  // TODO
+
+            ClientAbilityResults abilityResults = new ClientAbilityResults(instigator.ActorIndex, (int)actionType, seqStartDataList, actorToHitResults, posToHitResults);
+
+            return new ClientResolutionAction(ResolutionActionType.AbilityCast, abilityResults, null, null);
+        }
+
+        private ServerClientUtils.SequenceStartData MakeSequenceStart(ActorData instigator, Ability ability)
+        {
+            List<AbilityUtil_Targeter.ActorTarget> actorTargets = ability.Targeter.GetActorsInRange();
+            ActorData[] targetActorArray = new ActorData[actorTargets.Count];
+            for(int i = 0; i <actorTargets.Count; ++i)
+            {
+                targetActorArray[i] = actorTargets[i].m_actor;
+            }
+            ServerClientUtils.SequenceStartData result = new ServerClientUtils.SequenceStartData(
+                ability.m_sequencePrefab,
+                ability.Targeter.LastUpdateFreePos,
+                targetActorArray,
+                instigator,
+                new SequenceSource(null, null, 0U, true));
+            Log.Info($"SequenceStartData: prefab: {result.GetSequencePrefabId()}, pos: {result.GetTargetPos()}, actors: {result.GetTargetActorsString()}");
+            return result;
         }
 
         protected virtual void OnDestroy()
@@ -132,6 +249,50 @@ namespace ArtemisServer.GameServer
         public static ArtemisServerResolutionManager Get()
         {
             return instance;
+        }
+
+        public class StartResolutionPhase : MessageBase
+        {
+            public int CurrentTurnIndex;
+            public AbilityPriority CurrentAbilityPhase;
+            public int NumResolutionActionsThisPhase;
+
+            public override void Serialize(NetworkWriter writer)
+            {
+                writer.Write(CurrentTurnIndex);
+                writer.Write((sbyte)CurrentAbilityPhase);
+                writer.Write((sbyte)NumResolutionActionsThisPhase);
+            }
+
+            public override void Deserialize(NetworkReader reader)
+            {
+                CurrentTurnIndex = reader.ReadInt32();
+                CurrentAbilityPhase = (AbilityPriority)reader.ReadSByte();
+                NumResolutionActionsThisPhase = reader.ReadSByte();
+            }
+        }
+
+        public class SingleResolutionAction : MessageBase
+        {
+            public int TurnIndex;
+            public int PhaseIndex;
+            public ClientResolutionAction Action;
+
+            public override void Serialize(NetworkWriter writer)
+            {
+                writer.WritePackedUInt32((uint)TurnIndex);
+                writer.Write((sbyte)PhaseIndex);
+                IBitStream stream = new NetworkWriterAdapter(writer);
+                Action.ClientResolutionAction_SerializeToStream(ref stream);
+            }
+
+            public override void Deserialize(NetworkReader reader)
+            {
+                TurnIndex = (int)reader.ReadPackedUInt32();
+                PhaseIndex = reader.ReadSByte();
+                IBitStream stream = new NetworkReaderAdapter(reader);
+                Action = ClientResolutionAction.ClientResolutionAction_DeSerializeFromStream(ref stream);
+            }
         }
     }
 }

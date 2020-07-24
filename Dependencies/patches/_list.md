@@ -31,6 +31,14 @@ Removed error message in CheckMinHeight (Design scene file {0} is missing LOSHig
 ## MovementUtils.cs
 All internal methods -> public
 
+## NetworkReaderAdapter.cs
+internal -> public class NetworkReaderAdapter
+internal -> public NetworkReaderAdapter(NetworkReader stream)
+
+## NetworkWriterAdapter.cs
+internal -> public class NetworkWriterAdapter
+internal -> public NetworkWriterAdapter(NetworkReader stream)
+
 ## SequenceSource.cs
 internal -> public SequenceSource(...)
 
