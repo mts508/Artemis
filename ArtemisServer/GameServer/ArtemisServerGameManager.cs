@@ -127,9 +127,15 @@ namespace ArtemisServer.GameServer
                 turnSm.CallRpcTurnMessage((int)TurnMessage.BEGIN_RESOLVE, 0);
             }
             yield return 0;
+            Artemis.ArtemisServer.Get().SharedActionBuffer.Networkm_actionPhase = ActionBufferPhase.Abilities;
             GameFlowData.Get().gameState = GameState.BothTeams_Resolve;
+            // TODO update ATSDs on a separate tick
             yield return new WaitForSeconds(1);
-            ArtemisServerResolutionManager.Get().ResolveAbilities();
+            while(ArtemisServerResolutionManager.Get().ResolveNextPhase())
+            {
+                yield return new WaitForSeconds(2);
+                ArtemisServerResolutionManager.Get().ApplyTargets();
+            }
             yield return new WaitForSeconds(1);
             foreach (ActorData actor in GameFlowData.Get().GetActors())
             {
@@ -140,9 +146,10 @@ namespace ArtemisServer.GameServer
 
         private IEnumerator MovementResolution()
         {
+            Artemis.ArtemisServer.Get().SharedActionBuffer.Networkm_actionPhase = ActionBufferPhase.Movement;
+
             ArtemisServerMovementManager.Get().ResolveMovement();
             yield return new WaitForSeconds(6); // TODO ActorMovement.CalculateMoveTimeout() -- do we need some server version of ProcessMovement?
-
 
             foreach (ActorData actor in GameFlowData.Get().GetActors())
             {
@@ -152,6 +159,16 @@ namespace ArtemisServer.GameServer
                 turnSm.CallRpcTurnMessage((int)TurnMessage.MOVEMENT_RESOLVED, 0);
                 //actor.GetActorMovement().UpdateSquaresCanMoveTo();
             }
+
+            // TODO repeat all of the above for movement_chase
+            yield return null;
+            Artemis.ArtemisServer.Get().SharedActionBuffer.Networkm_actionPhase = ActionBufferPhase.MovementChase;
+            // ....
+            yield return null;
+
+            Artemis.ArtemisServer.Get().SharedActionBuffer.Networkm_actionPhase = ActionBufferPhase.MovementWait;
+            yield return null;
+            Artemis.ArtemisServer.Get().SharedActionBuffer.Networkm_actionPhase = ActionBufferPhase.Done;
 
             GameFlowData.Get().gameState = GameState.EndingTurn;
         }

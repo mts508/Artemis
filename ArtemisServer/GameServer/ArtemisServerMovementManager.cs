@@ -134,6 +134,8 @@ namespace ArtemisServer.GameServer
 
             // TODO merge paths (clashes, etc.)
 
+            // TODO ClientMovementManager.MsgServerMovementStarting
+
             foreach (ActorData actor in GameFlowData.Get().GetActors())
             {
                 BoardSquarePathInfo start = paths[actor.ActorIndex];

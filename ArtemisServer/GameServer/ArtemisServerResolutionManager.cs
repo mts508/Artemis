@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Theatrics;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -13,6 +14,11 @@ namespace ArtemisServer.GameServer
 
         private Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActors;
         private List<ClientResolutionAction> Actions;
+        private List<ActorAnimation> Animations;
+        internal AbilityPriority Phase { get; private set; }
+        private Turn Turn;
+
+        private uint NextSeqSourceRootID = 0;
 
         protected virtual void Awake()
         {
@@ -22,53 +28,140 @@ namespace ArtemisServer.GameServer
             }
         }
 
-        public void ResolveAbilities()
+        private void AdvancePhase()
         {
-            foreach (AbilityPriority priority in Enum.GetValues(typeof(AbilityPriority))) // TODO remove invalid priorities
+            Phase++;
+            if (Phase == AbilityPriority.DEPRICATED_Combat_Charge)
             {
-                Log.Info($"Resolving {priority} abilities");
+                Phase++;
+            }
+        }
 
-                // TheatricsManager.Get().m_turnToUpdate
-                // TODO TheatricManager.PlayPhase
+        public bool ResolveNextPhase()
+        {
+            bool lastPhase = false;
 
-                TargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
-                Actions = new List<ClientResolutionAction>();
+            TargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
+            Actions = new List<ClientResolutionAction>();
+            Animations = new List<ActorAnimation>();
+
+            var sab = Artemis.ArtemisServer.Get().SharedActionBuffer;
+
+            if (Turn == null)
+            {
+                Turn = new Turn()
+                {
+                    TurnID = GameFlowData.Get().CurrentTurn
+                };
+            }
+
+            while (Actions.Count == 0)
+            {
+                AdvancePhase();
+                if (Phase >= AbilityPriority.NumAbilityPriorities)
+                {
+                    Log.Info("Abilities resolved");
+                    lastPhase = true;
+                    break;
+                }
+                Log.Info($"Resolving {Phase} abilities");
 
                 foreach (ActorData actor in GameFlowData.Get().GetActors())
                 {
                     GameFlowData.Get().activeOwnedActorData = actor;
-                    ResolveAbilities(actor, priority);
+                    ResolveAbilities(actor, Phase);
                 }
-
-                if (Actions.Count != 0)
-                {
-                    SendToAll((short)MyMsgType.StartResolutionPhase, new StartResolutionPhase()
-                    {
-                        CurrentTurnIndex = GameFlowData.Get().CurrentTurn,
-                        CurrentAbilityPhase = priority,
-                        NumResolutionActionsThisPhase = Actions.Count
-                    });
-
-                    // TODO friendly/hostile visibility
-                    Log.Info($"Sending {Actions.Count} actions");
-                    foreach (ClientResolutionAction action in Actions)
-                    {
-                        Log.Info($"Sending action: {action.GetDebugDescription()}, Caster actor: {action.GetCaster().ActorIndex}, Action: {action.GetSourceAbilityActionType()}");
-                        SendToAll((short)MyMsgType.SingleResolutionAction, new SingleResolutionAction()
-                        {
-                            TurnIndex = GameFlowData.Get().CurrentTurn,
-                            PhaseIndex = (int)priority,
-                            Action = action
-                        });
-                    }
-
-                    // TODO process ClientResolutionManager.SendResolutionPhaseCompleted
-                }
-
-                ApplyTargets();
+                GameFlowData.Get().activeOwnedActorData = null;
             }
-            GameFlowData.Get().activeOwnedActorData = null;
-            Log.Info("Abilities resolved");
+
+            // TODO check this
+            //sab.Networkm_abilityPhase = Phase;
+
+            UpdateTheatricsPhase();
+
+            if (lastPhase)
+            {
+                Turn = null;
+                GameFlowData.Get().activeOwnedActorData = null;
+                sab.Networkm_actionPhase = ActionBufferPhase.AbilitiesWait;
+                sab.Networkm_abilityPhase = AbilityPriority.Prep_Defense;
+                Phase = AbilityPriority.INVALID;
+                return false;
+            }
+
+            SendToAll((short)MyMsgType.StartResolutionPhase, new StartResolutionPhase()
+            {
+                CurrentTurnIndex = GameFlowData.Get().CurrentTurn,
+                CurrentAbilityPhase = Phase,
+                NumResolutionActionsThisPhase = Actions.Count
+            });
+
+            // TODO friendly/hostile visibility
+            Log.Info($"Sending {Actions.Count} actions");
+            foreach (ClientResolutionAction action in Actions)
+            {
+                Log.Info($"Sending action: {action.GetDebugDescription()}, Caster actor: {action.GetCaster().ActorIndex}, Action: {action.GetSourceAbilityActionType()}");
+                SendToAll((short)MyMsgType.SingleResolutionAction, new SingleResolutionAction()
+                {
+                    TurnIndex = GameFlowData.Get().CurrentTurn,
+                    PhaseIndex = (int)Phase,
+                    Action = action
+                });
+            }
+
+            // TODO process ClientResolutionManager.SendResolutionPhaseCompleted
+            return true;
+        }
+
+        private void UpdateTheatricsPhase()
+        {
+            while (Turn.Phases.Count < (int)Phase)
+            {
+                Turn.Phases.Add(new Phase(Turn));
+            }
+
+            Dictionary<int, int> actorIndexToDeltaHP = GetActorIndexToDeltaHP(TargetedActors);
+            List<int> participants = new List<int>(actorIndexToDeltaHP.Keys);
+
+            Phase phase = new Phase(Turn)
+            {
+                Index = Phase,
+                ActorIndexToDeltaHP = actorIndexToDeltaHP,
+                ActorIndexToKnockback = new Dictionary<int, int>(), // TODO
+                Participants = participants, // TODO: add other participants (knockback, energy change, etc)
+                Animations = Animations
+            };
+
+            Turn.Phases.Add(phase);
+            UpdateTheatrics();
+        }
+
+        private void UpdateTheatrics()
+        {
+            var Theatrics = TheatricsManager.Get();
+            Theatrics.m_turn = Turn;
+            Theatrics.m_turnToUpdate = Turn.TurnID;
+            Theatrics.SetDirtyBit(uint.MaxValue);
+
+            AbilityPriority phase = Phase == AbilityPriority.NumAbilityPriorities ? AbilityPriority.INVALID : Phase;
+
+            // Theatrics.m_phaseToUpdate = phase;
+            Theatrics.PlayPhase(phase);
+        }
+
+            private Dictionary<int, int> GetActorIndexToDeltaHP(Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> targetedActors)
+        {
+            Dictionary<int, int> actorIndexToDeltaHP = new Dictionary<int, int>();
+            foreach (var targetedActor in targetedActors)
+            {
+                int actorIndex = targetedActor.Key.ActorIndex;
+                targetedActor.Value.TryGetValue(AbilityTooltipSymbol.Healing, out int healing);
+                targetedActor.Value.TryGetValue(AbilityTooltipSymbol.Damage, out int damage);
+                targetedActor.Value.TryGetValue(AbilityTooltipSymbol.Absorb, out int absorb);  // TODO: how does absorb count here? (does it count at all, does absorb from previous phase somehow affect calculations?)
+                int deltaHP = absorb + healing - damage;
+                actorIndexToDeltaHP.Add(actorIndex,  deltaHP);
+            }
+            return actorIndexToDeltaHP;
         }
 
         private void SendToAll(short msgType, MessageBase msg)
@@ -171,7 +264,10 @@ namespace ArtemisServer.GameServer
                 num++;
             }
 
-            foreach(var targetedActor in currentTargetedActors)
+            SequenceSource SeqSource = new SequenceSource(null, null, NextSeqSourceRootID++, true); // TODO
+            SeqSource.SetWaitForClientEnable(true);
+
+            foreach (var targetedActor in currentTargetedActors)
             {
                 foreach (var symbol in targetedActor.Value)
                 {
@@ -193,11 +289,43 @@ namespace ArtemisServer.GameServer
                         actionType,
                         abilityOfActionType,
                         targetedActor.Key,
-                        hitResults));
+                        hitResults,
+                        SeqSource));
                 }
 
                 TargetedActors.Add(targetedActor.Key, targetedActor.Value);
             }
+
+            Dictionary<int, int> actorIndexToDeltaHP = GetActorIndexToDeltaHP(currentTargetedActors);
+            Dictionary<ActorData, int> actorToDeltaHP = new Dictionary<ActorData, int>();
+            Vector3 targetPos = abilityOfActionType.Targeter.LastUpdateFreePos;  // just testing
+            byte x = (byte)instigator.CurrentBoardSquare.x;  // just testing
+            byte y = (byte)instigator.CurrentBoardSquare.y;  // just testing
+            foreach (var actorIndexAndDeltaHP in actorIndexToDeltaHP)
+            {
+                ActorData actor = GameFlowData.Get().FindActorByActorIndex(actorIndexAndDeltaHP.Key);
+                if (actor != null)
+                {
+                    actorToDeltaHP.Add(actor, Math.Sign(actorIndexAndDeltaHP.Value));
+                }
+            }
+            Animations.Add(new ActorAnimation(Turn)
+            {
+                animationIndex = (short)(actionType + 1),
+                actionType = actionType,
+                targetPos = targetPos, // TODO
+                actorIndex = instigator.ActorIndex,
+                cinematicCamera = false, // TODO taunts
+                tauntNumber = -1,
+                reveal = true,
+                playOrderIndex = (sbyte)Animations.Count, // TODO sort animations?
+                groupIndex = (sbyte)Animations.Count, // TODO what is it?
+                bounds = new Bounds(instigator.CurrentBoardSquare.GetWorldPosition(), new Vector3(10, 3, 10)), // TODO
+                HitActorsToDeltaHP = actorToDeltaHP,
+                SeqSource = SeqSource,
+                _000C_X = new List<byte>() { x, x, x },  // just testing
+                _0014_Z = new List<byte>() { y, y, y },  // just testing
+            }); ;
         }
 
         private ClientResolutionAction MakeResolutionAction(
@@ -205,11 +333,12 @@ namespace ArtemisServer.GameServer
             AbilityData.ActionType actionType,
             Ability abilityOfActionType,
             ActorData target,
-            ClientActorHitResults hitResults)
+            ClientActorHitResults hitResults,
+            SequenceSource seqSource)
         {
             List<ServerClientUtils.SequenceStartData> seqStartDataList = new List<ServerClientUtils.SequenceStartData>()
             {
-                MakeSequenceStart(instigator, abilityOfActionType)
+                MakeSequenceStart(instigator, abilityOfActionType, seqSource)
             };
             Dictionary<ActorData, ClientActorHitResults> actorToHitResults = new Dictionary<ActorData, ClientActorHitResults>();
             actorToHitResults.Add(target, hitResults);
@@ -220,20 +349,49 @@ namespace ArtemisServer.GameServer
             return new ClientResolutionAction(ResolutionActionType.AbilityCast, abilityResults, null, null);
         }
 
-        private ServerClientUtils.SequenceStartData MakeSequenceStart(ActorData instigator, Ability ability)
+        private ServerClientUtils.SequenceStartData MakeSequenceStart(
+            ActorData instigator,
+            Ability ability,
+            SequenceSource seqSource)
         {
             List<AbilityUtil_Targeter.ActorTarget> actorTargets = ability.Targeter.GetActorsInRange();
             ActorData[] targetActorArray = new ActorData[actorTargets.Count];
-            for(int i = 0; i <actorTargets.Count; ++i)
+            for(int i = 0; i < actorTargets.Count; ++i)
             {
                 targetActorArray[i] = actorTargets[i].m_actor;
             }
+            Sequence.IExtraSequenceParams[] extraParams = null;
+
+            if (ability.m_abilityName == "Trick Shot")
+            {
+                AbilityUtil_Targeter_BounceLaser targeter = ability.Targeter as AbilityUtil_Targeter_BounceLaser;
+                List<Vector3> segmentPts = new List<Vector3>();
+                foreach (Vector3 v in targeter.segmentPts)
+                {
+                    segmentPts.Add(new Vector3(v.x, Board.Get().LosCheckHeight, v.z));
+                }
+                Dictionary<ActorData, AreaEffectUtils.BouncingLaserInfo> laserTargets = new Dictionary<ActorData, AreaEffectUtils.BouncingLaserInfo>();
+                foreach (var t in actorTargets)
+                {
+                    laserTargets.Add(t.m_actor, new AreaEffectUtils.BouncingLaserInfo(Vector3.zero, segmentPts.Count - 1)); // TODO
+                }
+
+                BouncingShotSequence.ExtraParams param = new BouncingShotSequence.ExtraParams()
+                {
+                    doPositionHitOnBounce = true,
+                    useOriginalSegmentStartPos = false,
+                    segmentPts = segmentPts,
+                    laserTargets = laserTargets
+                };
+                extraParams = param.ToArray();
+            }
             ServerClientUtils.SequenceStartData result = new ServerClientUtils.SequenceStartData(
                 ability.m_sequencePrefab,
-                ability.Targeter.LastUpdateFreePos,
+                instigator.CurrentBoardSquare,
                 targetActorArray,
                 instigator,
-                new SequenceSource(null, null, 0U, true));
+                seqSource,
+                extraParams);
             Log.Info($"SequenceStartData: prefab: {result.GetSequencePrefabId()}, pos: {result.GetTargetPos()}, actors: {result.GetTargetActorsString()}");
             return result;
         }
