@@ -131,9 +131,13 @@ namespace ArtemisServer.GameServer
             GameFlowData.Get().gameState = GameState.BothTeams_Resolve;
             // TODO update ATSDs on a separate tick
             yield return new WaitForSeconds(1);
-            while(ArtemisServerResolutionManager.Get().ResolveNextPhase())
+
+            bool hasNextPhase = true;
+            while(hasNextPhase)
             {
-                yield return new WaitForSeconds(2);
+                hasNextPhase = ArtemisServerResolutionManager.Get().ResolveNextPhase();
+                yield return ArtemisServerResolutionManager.Get().WaitForTheatrics();
+                yield return new WaitForSeconds(.1f);
                 ArtemisServerResolutionManager.Get().ApplyTargets();
             }
             yield return new WaitForSeconds(1);

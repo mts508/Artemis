@@ -87,6 +87,8 @@ internal -> public static TheatricsManager Get()
 private -> public Turn m_turn
 private -> public AbilityPriority m_phaseToUpdate
 private -> public int m_turnToUpdate
+private -> public HashSet<long> m_playerConnectionIdsInUpdatePhase
+private -> public float m_phaseStartTime
 internal -> public void PlayPhase(AbilityPriority phaseIndex)
 internal static bool \u000E -> internal static bool DebugLog
 internal void \u000E(string \u001D) -> internal void ServerLog(string msg)

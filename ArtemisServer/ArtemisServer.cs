@@ -267,6 +267,7 @@ namespace Artemis
             {
                 GameObject character = playerActor.gameObject;
                 character.GetComponent<PlayerData>().m_player = player;  // PATCH internal -> public PlayerData::m_player
+                GameFlow.Get().playerDetails[player]?.m_gameObjects.Add(character);
                 Log.Info($"Registered player with account id {player.m_accountId} as player {playerIndex} ({character.name})");
                 NetworkServer.AddPlayerForConnection(connection, character, 0);
             }

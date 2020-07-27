@@ -1,5 +1,6 @@
 ﻿using Theatrics;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -19,6 +20,8 @@ namespace ArtemisServer.GameServer
         private Turn Turn;
 
         private uint NextSeqSourceRootID = 0;
+
+        private HashSet<long> TheatricsPendingClients = new HashSet<long>();
 
         protected virtual void Awake()
         {
@@ -113,6 +116,36 @@ namespace ArtemisServer.GameServer
             return true;
         }
 
+        public IEnumerator WaitForTheatrics()
+        {
+            TheatricsPendingClients.Clear();
+
+
+            foreach (long clientId in TheatricsManager.Get().m_playerConnectionIdsInUpdatePhase)
+            {
+                TheatricsPendingClients.Add(clientId);
+            }
+            Log.Info($"Waiting for {TheatricsPendingClients.Count} ({TheatricsManager.Get().m_playerConnectionIdsInUpdatePhase.Count}) clients to perform theatrics");
+
+            while (TheatricsPendingClients.Count > 0)  // TODO add timelimit
+            {
+                yield return new WaitForSeconds(1);
+            }
+        }
+
+        public void OnClientResolutionPhaseCompleted(NetworkConnection conn, GameMessageManager.ClientResolutionPhaseCompleted msg)
+        {
+            Player player = GameFlow.Get().GetPlayerFromConnectionId(conn.connectionId);
+            ActorData actor = GameFlowData.Get().FindActorByActorIndex(msg.ActorIndex);
+
+            if (actor.gameObject.GetComponent<PlayerData>().m_player.m_connectionId != conn.connectionId)
+            {
+                Log.Warning($"OnClientResolutionPhaseCompleted: {actor.DisplayName} does not belong to player {player.m_accountId}!");
+            }
+
+            TheatricsPendingClients.Remove(player.m_accountId);
+        }
+
         private void UpdateTheatricsPhase()
         {
             while (Turn.Phases.Count < (int)Phase)
@@ -149,7 +182,7 @@ namespace ArtemisServer.GameServer
             Theatrics.PlayPhase(phase);
         }
 
-            private Dictionary<int, int> GetActorIndexToDeltaHP(Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> targetedActors)
+        private Dictionary<int, int> GetActorIndexToDeltaHP(Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> targetedActors)
         {
             Dictionary<int, int> actorIndexToDeltaHP = new Dictionary<int, int>();
             foreach (var targetedActor in targetedActors)

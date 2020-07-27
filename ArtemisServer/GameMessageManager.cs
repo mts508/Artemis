@@ -27,6 +27,7 @@ namespace ArtemisServer
 
 
             NetworkServer.RegisterHandler((short)MyMsgType.CastAbility, new NetworkMessageDelegate(HandleCastAbility));
+            NetworkServer.RegisterHandler((short)MyMsgType.ClientResolutionPhaseCompleted, new NetworkMessageDelegate(HandleClientResolutionPhaseCompleted));
         }
 
         private static void HandleAddPlayer(NetworkMessage message)
@@ -108,6 +109,21 @@ namespace ArtemisServer
             }
         }
 
+        private static void HandleClientResolutionPhaseCompleted(NetworkMessage message)
+        {
+            ClientResolutionPhaseCompleted msg = message.ReadMessage<ClientResolutionPhaseCompleted>();
+            Log.Info($"CLIENTRESOLUTIONPHASECOMPLETED -> actor: {msg.ActorIndex}, phase: {msg.AbilityPhase}, failsafe: {msg.AsFailsafe}, resend: {msg.AsResend}");
+            ArtemisServerResolutionManager resolutionManager = ArtemisServerResolutionManager.Get();
+            if (resolutionManager == null)
+            {
+                Log.Info($"CLIENTRESOLUTIONPHASECOMPLETED ignored");
+            }
+            else
+            {
+                resolutionManager.OnClientResolutionPhaseCompleted(message.conn, msg);
+            }
+        }
+
         public class CastAbility : MessageBase
         {
             public int CasterIndex;
@@ -123,9 +139,33 @@ namespace ArtemisServer
 
             public override void Deserialize(NetworkReader reader)
             {
-                this.CasterIndex = reader.ReadInt32();
-                this.ActionType = reader.ReadInt32();
-                this.Targets = AbilityTarget.DeSerializeAbilityTargetList(reader);
+                CasterIndex = reader.ReadInt32();
+                ActionType = reader.ReadInt32();
+                Targets = AbilityTarget.DeSerializeAbilityTargetList(reader);
+            }
+        }
+
+        public class ClientResolutionPhaseCompleted : MessageBase
+        {
+            public AbilityPriority AbilityPhase;
+            public int ActorIndex;
+            public bool AsFailsafe;
+            public bool AsResend;
+
+            public override void Serialize(NetworkWriter writer)
+            {
+                writer.Write((sbyte)AbilityPhase);
+                writer.Write(ActorIndex);
+                writer.Write(AsFailsafe);
+                writer.Write(AsResend);
+            }
+
+            public override void Deserialize(NetworkReader reader)
+            {
+                AbilityPhase = (AbilityPriority)reader.ReadSByte();
+                ActorIndex = reader.ReadInt32();
+                AsFailsafe = reader.ReadBoolean();
+                AsResend = reader.ReadBoolean();
             }
         }
     }
