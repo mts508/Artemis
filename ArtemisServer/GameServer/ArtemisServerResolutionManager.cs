@@ -220,7 +220,6 @@ namespace ArtemisServer.GameServer
             // * AppearAtBoardSquare to set actor's current board square
             // * patch TargeterUtils so that RemoveActorsInvisibleToClient isn't called on the server
             // * ..?
-            // TODO targeters can use visibility to client inside (ActorData.IsVisibleToClient)
             // TODO SoldierDashAndOverwatch.m_hitPhase
             foreach (ActorTargeting.AbilityRequestData ard in actor.TeamSensitiveData_authority.GetAbilityRequestData())
             {
@@ -300,6 +299,7 @@ namespace ArtemisServer.GameServer
             SequenceSource SeqSource = new SequenceSource(null, null, NextSeqSourceRootID++, true); // TODO
             SeqSource.SetWaitForClientEnable(true);
 
+            Dictionary<ActorData, ClientActorHitResults> actorToHitResults = new Dictionary<ActorData, ClientActorHitResults>();
             foreach (var targetedActor in currentTargetedActors)
             {
                 foreach (var symbol in targetedActor.Value)
@@ -317,17 +317,17 @@ namespace ArtemisServer.GameServer
                             hitResults = new ClientActorHitResultsBuilder().Build();
                             break;
                     }
-                    Actions.Add(MakeResolutionAction(
-                        instigator,
-                        actionType,
-                        abilityOfActionType,
-                        targetedActor.Key,
-                        hitResults,
-                        SeqSource));
+                    actorToHitResults.Add(targetedActor.Key, hitResults);
                 }
 
                 TargetedActors.Add(targetedActor.Key, targetedActor.Value);
             }
+            Actions.Add(MakeResolutionAction(
+                instigator,
+                actionType,
+                abilityOfActionType,
+                actorToHitResults,
+                SeqSource));
 
             Dictionary<int, int> actorIndexToDeltaHP = GetActorIndexToDeltaHP(currentTargetedActors);
             Dictionary<ActorData, int> actorToDeltaHP = new Dictionary<ActorData, int>();
@@ -365,16 +365,13 @@ namespace ArtemisServer.GameServer
             ActorData instigator,
             AbilityData.ActionType actionType,
             Ability abilityOfActionType,
-            ActorData target,
-            ClientActorHitResults hitResults,
+            Dictionary<ActorData, ClientActorHitResults> actorToHitResults,
             SequenceSource seqSource)
         {
             List<ServerClientUtils.SequenceStartData> seqStartDataList = new List<ServerClientUtils.SequenceStartData>()
             {
                 MakeSequenceStart(instigator, abilityOfActionType, seqSource)
             };
-            Dictionary<ActorData, ClientActorHitResults> actorToHitResults = new Dictionary<ActorData, ClientActorHitResults>();
-            actorToHitResults.Add(target, hitResults);
             Dictionary<Vector3, ClientPositionHitResults> posToHitResults = new Dictionary<Vector3, ClientPositionHitResults>();  // TODO
 
             ClientAbilityResults abilityResults = new ClientAbilityResults(instigator.ActorIndex, (int)actionType, seqStartDataList, actorToHitResults, posToHitResults);
