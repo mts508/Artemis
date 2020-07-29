@@ -120,7 +120,6 @@ namespace ArtemisServer.GameServer
         {
             TheatricsPendingClients.Clear();
 
-
             foreach (long clientId in TheatricsManager.Get().m_playerConnectionIdsInUpdatePhase)
             {
                 TheatricsPendingClients.Add(clientId);
@@ -150,22 +149,38 @@ namespace ArtemisServer.GameServer
         {
             while (Turn.Phases.Count < (int)Phase)
             {
-                Turn.Phases.Add(new Phase(Turn));
+                Turn.Phases.Add(new Phase(Turn)
+                {
+                    Index = (AbilityPriority)Turn.Phases.Count
+                });
             }
 
-            Dictionary<int, int> actorIndexToDeltaHP = GetActorIndexToDeltaHP(TargetedActors);
-            List<int> participants = new List<int>(actorIndexToDeltaHP.Keys);
-
-            Phase phase = new Phase(Turn)
+            if (Phase < AbilityPriority.NumAbilityPriorities)
             {
-                Index = Phase,
-                ActorIndexToDeltaHP = actorIndexToDeltaHP,
-                ActorIndexToKnockback = new Dictionary<int, int>(), // TODO
-                Participants = participants, // TODO: add other participants (knockback, energy change, etc)
-                Animations = Animations
-            };
+                Dictionary<int, int> actorIndexToDeltaHP = GetActorIndexToDeltaHP(TargetedActors);
+                List<int> participants = new List<int>(actorIndexToDeltaHP.Keys);
 
-            Turn.Phases.Add(phase);
+                foreach (var action in Actions)
+                {
+                    int actorIndex = action.GetCaster().ActorIndex;
+                    if (!participants.Contains(actorIndex))
+                    {
+                        participants.Add(actorIndex);
+                    }
+                }
+
+                Phase phase = new Phase(Turn)
+                {
+                    Index = Phase,
+                    ActorIndexToDeltaHP = actorIndexToDeltaHP,
+                    ActorIndexToKnockback = new Dictionary<int, int>(), // TODO
+                    Participants = participants, // TODO: add other participants (knockback, energy change, etc)
+                    Animations = Animations
+                };
+
+                Turn.Phases.Add(phase);
+            }
+
             UpdateTheatrics();
         }
 
@@ -220,7 +235,6 @@ namespace ArtemisServer.GameServer
             // * AppearAtBoardSquare to set actor's current board square
             // * patch TargeterUtils so that RemoveActorsInvisibleToClient isn't called on the server
             // * ..?
-            // TODO SoldierDashAndOverwatch.m_hitPhase
             foreach (ActorTargeting.AbilityRequestData ard in actor.TeamSensitiveData_authority.GetAbilityRequestData())
             {
                 Ability ability = abilityData.GetAbilityOfActionType(ard.m_actionType);
@@ -342,7 +356,7 @@ namespace ArtemisServer.GameServer
                     actorToDeltaHP.Add(actor, Math.Sign(actorIndexAndDeltaHP.Value));
                 }
             }
-            Animations.Add(new ActorAnimation(Turn)
+            ActorAnimation anim = new ActorAnimation(Turn)
             {
                 animationIndex = (short)(actionType + 1),
                 actionType = actionType,
@@ -355,10 +369,26 @@ namespace ArtemisServer.GameServer
                 groupIndex = (sbyte)Animations.Count, // TODO what is it?
                 bounds = new Bounds(instigator.CurrentBoardSquare.GetWorldPosition(), new Vector3(10, 3, 10)), // TODO
                 HitActorsToDeltaHP = actorToDeltaHP,
-                SeqSource = SeqSource,
-                _000C_X = new List<byte>() { x, x, x },  // just testing
-                _0014_Z = new List<byte>() { y, y, y },  // just testing
-            }); ;
+                SeqSource = SeqSource
+            };
+
+            if (abilityOfActionType.m_abilityName == "Trick Shot")
+            {
+                if (actorToDeltaHP.Count == 0)
+                {
+                    anim._000C_X = new List<byte>() { x, x };
+                    anim._0014_Z = new List<byte>() { y, y };
+                }
+                else
+                {
+                    anim._000C_X = new List<byte>() { x, x, x };
+                    anim._0014_Z = new List<byte>() { y, y, y };
+                }
+
+                anim.HitActorsToDeltaHP.Add(instigator, 0);
+            }
+
+            Animations.Add(anim);
         }
 
         private ClientResolutionAction MakeResolutionAction(
@@ -373,6 +403,23 @@ namespace ArtemisServer.GameServer
                 MakeSequenceStart(instigator, abilityOfActionType, seqSource)
             };
             Dictionary<Vector3, ClientPositionHitResults> posToHitResults = new Dictionary<Vector3, ClientPositionHitResults>();  // TODO
+
+            if (abilityOfActionType.m_abilityName == "Trick Shot")
+            {
+                // Adding fake positional hit at the end of the line so that the client actually shows the shot.
+                // It's not how the original server tackled this.
+                if (actorToHitResults.Count == 0)
+                {
+                    List<Vector3> segmentPts = (seqStartDataList[0].GetExtraParams()[0] as BouncingShotSequence.ExtraParams).segmentPts;
+                    posToHitResults.Add(segmentPts[segmentPts.Count - 1], new ClientPositionHitResults(
+                        new List<ClientEffectStartData>(),
+                        new List<ClientBarrierStartData>(),
+                        new List<int>(),
+                        new List<int>(),
+                        new List<ServerClientUtils.SequenceEndData>(),
+                        new List<ClientMovementResults>()));
+                }
+            }
 
             ClientAbilityResults abilityResults = new ClientAbilityResults(instigator.ActorIndex, (int)actionType, seqStartDataList, actorToHitResults, posToHitResults);
 
