@@ -38,6 +38,13 @@ internal ActorVFX \u000E() -> internal ActorVFX GetActorVFX()
 internal TimeBank \u000E() -> internal TimeBank GetTimeBank()
 internal FogOfWar \u000E() -> internal GetFogOfWar()
 public Animator \u000E() -> public Animator GetModelAnimator
+public Vector3 \u0015() -> public Vector3 GetTravelBoardSquareWorldPositionForLos()
+public Vector3 \u0016() -> public Vector3 GetTravelBoardSquareWorldPosition()
+public Vector3 \u000E(BoardSquare \u001D) -> public Vector3 GetSquareWorldPositionForLoS(BoardSquare square)
+public Vector3 \u0012(BoardSquare \u001D) -> public Vector3 GetSquareWorldPosition(BoardSquare square)
+public List<Team> \u000E() -> public List<Team> GetOtherTeams()
+public List<Team> \u0012() -> public List<Team> GetTeams()
+public List<Team> \u0015() -> public List<Team> GetEnemyTeams()
 
 ## CameraManager.cs
 in Update

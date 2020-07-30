@@ -1,11 +1,9 @@
 ﻿using Theatrics;
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
-using UnityEngine.Networking.NetworkSystem;
+using ArtemisServer.GameServer.Abilities;
 
 namespace ArtemisServer.GameServer
 {
@@ -17,9 +15,11 @@ namespace ArtemisServer.GameServer
         private List<ClientResolutionAction> Actions;
         private List<ActorAnimation> Animations;
         internal AbilityPriority Phase { get; private set; }
-        private Turn Turn;
+        internal Turn Turn;
 
-        private uint NextSeqSourceRootID = 0;
+        private uint m_nextSeqSourceRootID = 0;
+
+        public uint NextSeqSourceRootID => m_nextSeqSourceRootID++;
 
         private HashSet<long> TheatricsPendingClients = new HashSet<long>();
 
@@ -157,7 +157,7 @@ namespace ArtemisServer.GameServer
 
             if (Phase < AbilityPriority.NumAbilityPriorities)
             {
-                Dictionary<int, int> actorIndexToDeltaHP = GetActorIndexToDeltaHP(TargetedActors);
+                Dictionary<int, int> actorIndexToDeltaHP = Utils.GetActorIndexToDeltaHP(TargetedActors);
                 List<int> participants = new List<int>(actorIndexToDeltaHP.Keys);
 
                 foreach (var action in Actions)
@@ -197,21 +197,6 @@ namespace ArtemisServer.GameServer
             Theatrics.PlayPhase(phase);
         }
 
-        private Dictionary<int, int> GetActorIndexToDeltaHP(Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> targetedActors)
-        {
-            Dictionary<int, int> actorIndexToDeltaHP = new Dictionary<int, int>();
-            foreach (var targetedActor in targetedActors)
-            {
-                int actorIndex = targetedActor.Key.ActorIndex;
-                targetedActor.Value.TryGetValue(AbilityTooltipSymbol.Healing, out int healing);
-                targetedActor.Value.TryGetValue(AbilityTooltipSymbol.Damage, out int damage);
-                targetedActor.Value.TryGetValue(AbilityTooltipSymbol.Absorb, out int absorb);  // TODO: how does absorb count here? (does it count at all, does absorb from previous phase somehow affect calculations?)
-                int deltaHP = absorb + healing - damage;
-                actorIndexToDeltaHP.Add(actorIndex,  deltaHP);
-            }
-            return actorIndexToDeltaHP;
-        }
-
         private void SendToAll(short msgType, MessageBase msg)
         {
             foreach (ActorData actor in GameFlowData.Get().GetActors())
@@ -223,11 +208,7 @@ namespace ArtemisServer.GameServer
 
         public void ResolveAbilities(ActorData actor, AbilityPriority priority)
         {
-            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
-            ActorController actorController = actor.gameObject.GetComponent<ActorController>();
             AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
-            ActorTeamSensitiveData atsd = actor.TeamSensitiveData_authority;
-            ActorMovement actorMovement = actor.GetActorMovement();
 
             // I didn't find any code that calculates what an ability hits aside from UpdateTargeting which is
             // used to draw targeters on the client. In order for it to work on the server we need to
@@ -245,14 +226,21 @@ namespace ArtemisServer.GameServer
                 }
                 Log.Info($"Resolving {ability.m_abilityName} for {actor.DisplayName}");
 
-                for (int i = 0; i < ard.m_targets.Count; ++i)
-                {
-                    ability.Targeters[i].UpdateTargeting(ard.m_targets[i], actor);
-                    ability.Targeters[i].SetLastUpdateCursorState(ard.m_targets[i]);
-                }
-
-                CalculateTargetedActors(actor, ard.m_actionType, ability);
+                AbilityResolver resolver = GetAbilityResolver(actor, ability, priority, ard);
+                resolver.Resolve();
+                Actions.AddRange(resolver.Actions);
+                Animations.AddRange(resolver.Animations);
+                Utils.Add(ref TargetedActors, resolver.TargetedActors);
             }
+        }
+
+        private AbilityResolver GetAbilityResolver(ActorData actor, Ability ability, AbilityPriority priority, ActorTargeting.AbilityRequestData abilityRequestData)
+        {
+            if (ability.m_abilityName == "Trick Shot")
+            {
+                return new AbilityResolver_TrickShot(actor, ability, priority, abilityRequestData);
+            }
+            return new AbilityResolver(actor, ability, priority, abilityRequestData);
         }
 
         public void ApplyTargets()
@@ -271,206 +259,6 @@ namespace ArtemisServer.GameServer
                     }
                 }
             }
-        }
-
-        // Based on ActorTargeting.CalculateTargetedActors
-        public void CalculateTargetedActors(ActorData instigator, AbilityData.ActionType actionType, Ability abilityOfActionType)
-        {
-            Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> currentTargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
-            int num = 0;
-            Log.Info($"{abilityOfActionType.Targeters.Count}/{abilityOfActionType.GetExpectedNumberOfTargeters()} targeters");
-            while (num < abilityOfActionType.Targeters.Count && num < abilityOfActionType.GetExpectedNumberOfTargeters())
-            {
-                AbilityUtil_Targeter abilityUtil_Targeter = abilityOfActionType.Targeters[num];
-                Log.Info($"targeter {num} : {abilityUtil_Targeter}");
-                if (abilityUtil_Targeter != null)
-                {
-                    List<AbilityUtil_Targeter.ActorTarget> actorsInRange = abilityUtil_Targeter.GetActorsInRange();
-                    Log.Info($"{actorsInRange.Count} actors in range");
-                    foreach (AbilityUtil_Targeter.ActorTarget actorTarget in actorsInRange)
-                    {
-                        Dictionary<AbilityTooltipSymbol, int> dictionary = new Dictionary<AbilityTooltipSymbol, int>();
-                        ActorTargeting.GetNameplateNumbersForTargeter(instigator, actorTarget.m_actor, abilityOfActionType, num, dictionary);
-                        Log.Info($"{dictionary.Count} nameplate numbers for {actorTarget.m_actor.DisplayName}");
-                        foreach (KeyValuePair<AbilityTooltipSymbol, int> keyValuePair in dictionary)
-                        {
-                            AbilityTooltipSymbol key = keyValuePair.Key;
-                            if (!currentTargetedActors.ContainsKey(actorTarget.m_actor))
-                            {
-                                currentTargetedActors[actorTarget.m_actor] = new Dictionary<AbilityTooltipSymbol, int>();
-                            }
-                            if (!currentTargetedActors[actorTarget.m_actor].ContainsKey(key))
-                            {
-                                currentTargetedActors[actorTarget.m_actor][key] = 0;
-                            }
-                            currentTargetedActors[actorTarget.m_actor][key] += keyValuePair.Value;
-                        }
-                    }
-                }
-                num++;
-            }
-
-            SequenceSource SeqSource = new SequenceSource(null, null, NextSeqSourceRootID++, true); // TODO
-            SeqSource.SetWaitForClientEnable(true);
-
-            Dictionary<ActorData, ClientActorHitResults> actorToHitResults = new Dictionary<ActorData, ClientActorHitResults>();
-            foreach (var targetedActor in currentTargetedActors)
-            {
-                foreach (var symbol in targetedActor.Value)
-                {
-                    ClientActorHitResults hitResults;
-                    switch (symbol.Key)
-                    {
-                        case AbilityTooltipSymbol.Damage:
-                            hitResults = new ClientActorHitResultsBuilder()
-                                .SetDamage(symbol.Value, Vector3.zero, false, false)  // TODO
-                                .Build();
-                            Log.Info($"HitResults: damage: {symbol.Value}");
-                            break;
-                        default:
-                            hitResults = new ClientActorHitResultsBuilder().Build();
-                            break;
-                    }
-                    actorToHitResults.Add(targetedActor.Key, hitResults);
-                }
-
-                TargetedActors.Add(targetedActor.Key, targetedActor.Value);
-            }
-            Actions.Add(MakeResolutionAction(
-                instigator,
-                actionType,
-                abilityOfActionType,
-                actorToHitResults,
-                SeqSource));
-
-            Dictionary<int, int> actorIndexToDeltaHP = GetActorIndexToDeltaHP(currentTargetedActors);
-            Dictionary<ActorData, int> actorToDeltaHP = new Dictionary<ActorData, int>();
-            Vector3 targetPos = abilityOfActionType.Targeter.LastUpdateFreePos;  // just testing
-            byte x = (byte)instigator.CurrentBoardSquare.x;  // just testing
-            byte y = (byte)instigator.CurrentBoardSquare.y;  // just testing
-            foreach (var actorIndexAndDeltaHP in actorIndexToDeltaHP)
-            {
-                ActorData actor = GameFlowData.Get().FindActorByActorIndex(actorIndexAndDeltaHP.Key);
-                if (actor != null)
-                {
-                    actorToDeltaHP.Add(actor, Math.Sign(actorIndexAndDeltaHP.Value));
-                }
-            }
-            ActorAnimation anim = new ActorAnimation(Turn)
-            {
-                animationIndex = (short)(actionType + 1),
-                actionType = actionType,
-                targetPos = targetPos, // TODO
-                actorIndex = instigator.ActorIndex,
-                cinematicCamera = false, // TODO taunts
-                tauntNumber = -1,
-                reveal = true,
-                playOrderIndex = (sbyte)Animations.Count, // TODO sort animations?
-                groupIndex = (sbyte)Animations.Count, // TODO what is it?
-                bounds = new Bounds(instigator.CurrentBoardSquare.GetWorldPosition(), new Vector3(10, 3, 10)), // TODO
-                HitActorsToDeltaHP = actorToDeltaHP,
-                SeqSource = SeqSource
-            };
-
-            if (abilityOfActionType.m_abilityName == "Trick Shot")
-            {
-                if (actorToDeltaHP.Count == 0)
-                {
-                    anim._000C_X = new List<byte>() { x, x };
-                    anim._0014_Z = new List<byte>() { y, y };
-                }
-                else
-                {
-                    anim._000C_X = new List<byte>() { x, x, x };
-                    anim._0014_Z = new List<byte>() { y, y, y };
-                }
-
-                anim.HitActorsToDeltaHP.Add(instigator, 0);
-            }
-
-            Animations.Add(anim);
-        }
-
-        private ClientResolutionAction MakeResolutionAction(
-            ActorData instigator,
-            AbilityData.ActionType actionType,
-            Ability abilityOfActionType,
-            Dictionary<ActorData, ClientActorHitResults> actorToHitResults,
-            SequenceSource seqSource)
-        {
-            List<ServerClientUtils.SequenceStartData> seqStartDataList = new List<ServerClientUtils.SequenceStartData>()
-            {
-                MakeSequenceStart(instigator, abilityOfActionType, seqSource)
-            };
-            Dictionary<Vector3, ClientPositionHitResults> posToHitResults = new Dictionary<Vector3, ClientPositionHitResults>();  // TODO
-
-            if (abilityOfActionType.m_abilityName == "Trick Shot")
-            {
-                // Adding fake positional hit at the end of the line so that the client actually shows the shot.
-                // It's not how the original server tackled this.
-                if (actorToHitResults.Count == 0)
-                {
-                    List<Vector3> segmentPts = (seqStartDataList[0].GetExtraParams()[0] as BouncingShotSequence.ExtraParams).segmentPts;
-                    posToHitResults.Add(segmentPts[segmentPts.Count - 1], new ClientPositionHitResults(
-                        new List<ClientEffectStartData>(),
-                        new List<ClientBarrierStartData>(),
-                        new List<int>(),
-                        new List<int>(),
-                        new List<ServerClientUtils.SequenceEndData>(),
-                        new List<ClientMovementResults>()));
-                }
-            }
-
-            ClientAbilityResults abilityResults = new ClientAbilityResults(instigator.ActorIndex, (int)actionType, seqStartDataList, actorToHitResults, posToHitResults);
-
-            return new ClientResolutionAction(ResolutionActionType.AbilityCast, abilityResults, null, null);
-        }
-
-        private ServerClientUtils.SequenceStartData MakeSequenceStart(
-            ActorData instigator,
-            Ability ability,
-            SequenceSource seqSource)
-        {
-            List<AbilityUtil_Targeter.ActorTarget> actorTargets = ability.Targeter.GetActorsInRange();
-            ActorData[] targetActorArray = new ActorData[actorTargets.Count];
-            for(int i = 0; i < actorTargets.Count; ++i)
-            {
-                targetActorArray[i] = actorTargets[i].m_actor;
-            }
-            Sequence.IExtraSequenceParams[] extraParams = null;
-
-            if (ability.m_abilityName == "Trick Shot")
-            {
-                AbilityUtil_Targeter_BounceLaser targeter = ability.Targeter as AbilityUtil_Targeter_BounceLaser;
-                List<Vector3> segmentPts = new List<Vector3>();
-                foreach (Vector3 v in targeter.segmentPts)
-                {
-                    segmentPts.Add(new Vector3(v.x, Board.Get().LosCheckHeight, v.z));
-                }
-                Dictionary<ActorData, AreaEffectUtils.BouncingLaserInfo> laserTargets = new Dictionary<ActorData, AreaEffectUtils.BouncingLaserInfo>();
-                foreach (var t in actorTargets)
-                {
-                    laserTargets.Add(t.m_actor, new AreaEffectUtils.BouncingLaserInfo(Vector3.zero, segmentPts.Count - 1)); // TODO
-                }
-
-                BouncingShotSequence.ExtraParams param = new BouncingShotSequence.ExtraParams()
-                {
-                    doPositionHitOnBounce = true,
-                    useOriginalSegmentStartPos = false,
-                    segmentPts = segmentPts,
-                    laserTargets = laserTargets
-                };
-                extraParams = param.ToArray();
-            }
-            ServerClientUtils.SequenceStartData result = new ServerClientUtils.SequenceStartData(
-                ability.m_sequencePrefab,
-                instigator.CurrentBoardSquare,
-                targetActorArray,
-                instigator,
-                seqSource,
-                extraParams);
-            Log.Info($"SequenceStartData: prefab: {result.GetSequencePrefabId()}, pos: {result.GetTargetPos()}, actors: {result.GetTargetActorsString()}");
-            return result;
         }
 
         protected virtual void OnDestroy()
