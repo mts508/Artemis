@@ -29,23 +29,6 @@ namespace ArtemisServer.GameServer.Abilities
             m_abilityRequestData = abilityRequestData;
         }
 
-        protected TargeterResolver GetTargeterResolver(Ability ability, int index, AbilityTarget target, ActorData caster)
-        {
-            AbilityUtil_Targeter targeter = ability.Targeters[index];
-
-            if (targeter == null)
-            {
-                return null;
-            }
-
-            return GetTargeterResolver(ability, index, targeter, target, caster);
-        }
-
-        protected virtual TargeterResolver GetTargeterResolver(Ability ability, int index, AbilityUtil_Targeter targeter, AbilityTarget target, ActorData caster)
-        {
-            return new TargeterResolver(targeter, target, caster, ability);
-        }
-
         public void Resolve()
         {
             TargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
@@ -56,13 +39,12 @@ namespace ArtemisServer.GameServer.Abilities
 
             for (int i = 0; i < m_abilityRequestData.m_targets.Count; ++i)
             {
-                CurrentTargeterResolver = GetTargeterResolver(m_ability, i, m_abilityRequestData.m_targets[i], m_caster);
+                CurrentTargeterResolver = MakeTargeterResolver(m_ability, i, m_abilityRequestData.m_targets[i], m_caster);
                 targeterResolvers.Add(CurrentTargeterResolver);
                 CurrentTargeterResolver.Prepare();
             }
 
             // Based on ActorTargeting.CalculateTargetedActors
-           
             Log.Info($"{m_ability.Targeters.Count}/{m_ability.GetExpectedNumberOfTargeters()} targeters");
             for (int i = 0; i < m_ability.Targeters.Count && i < m_ability.GetExpectedNumberOfTargeters(); i++)
             {
@@ -73,9 +55,6 @@ namespace ArtemisServer.GameServer.Abilities
                     var targets = CurrentTargeterResolver.Resolve(m_caster, m_ability, i);
                     Utils.Add(ref TargetedActors, targets);
                 }
-
-                SequenceSource SeqSource = new SequenceSource(null, null, ArtemisServerResolutionManager.Get().NextSeqSourceRootID, true); // TODO
-                SeqSource.SetWaitForClientEnable(true);
 
                 Dictionary<ActorData, ClientActorHitResults> actorToHitResults = new Dictionary<ActorData, ClientActorHitResults>();
                 foreach (var targetedActor in TargetedActors)
@@ -98,42 +77,39 @@ namespace ArtemisServer.GameServer.Abilities
                         actorToHitResults.Add(targetedActor.Key, hitResults);
                     }
                 }
-                Actions.Add(MakeResolutionAction(actorToHitResults, SeqSource));
-                MakeAnimations(SeqSource);
+
+                SequenceSource seqSource = MakeSequenceSource();
+                Actions.Add(MakeResolutionAction(actorToHitResults, seqSource));
+                MakeAnimations(seqSource);
             }
             CurrentTargeterResolver = null;
         }
 
-        private void MakeAnimations(SequenceSource SeqSource)
+        protected TargeterResolver MakeTargeterResolver(Ability ability, int index, AbilityTarget target, ActorData caster)
         {
-            Vector3 targetPos = m_ability.Targeter.LastUpdateFreePos;  // just testing
-            ActorAnimation anim = new ActorAnimation(ArtemisServerResolutionManager.Get().Turn)
+            AbilityUtil_Targeter targeter = ability.Targeters[index];
+
+            if (targeter == null)
             {
-                animationIndex = (short)(ActionType + 1),
-                actionType = ActionType,
-                targetPos = targetPos, // TODO
-                actorIndex = m_caster.ActorIndex,
-                cinematicCamera = false, // TODO taunts
-                tauntNumber = -1,
-                reveal = true,
-                playOrderIndex = (sbyte)Animations.Count, // TODO sort animations?
-                groupIndex = (sbyte)Animations.Count, // TODO what is it?
-                bounds = new Bounds(m_caster.CurrentBoardSquare.GetWorldPosition(), new Vector3(10, 3, 10)), // TODO
-                HitActorsToDeltaHP = MakeAnimActorToDeltaHP(),
-                SeqSource = SeqSource
-            };
-            Make_000C_X_0014_Z(out anim._000C_X, out anim._0014_Z);
+                return null;
+            }
 
-            Animations.Add(anim);
+            return MakeTargeterResolver(ability, index, targeter, target, caster);
         }
 
-        protected virtual void Make_000C_X_0014_Z(out List<byte> x, out List<byte> y)
+        protected virtual TargeterResolver MakeTargeterResolver(Ability ability, int index, AbilityUtil_Targeter targeter, AbilityTarget target, ActorData caster)
         {
-            x = new List<byte>();
-            y = new List<byte>();
+            return new TargeterResolver(targeter, target, caster, ability);
         }
 
-        protected ClientResolutionAction MakeResolutionAction(
+        protected virtual SequenceSource MakeSequenceSource()
+        {
+            SequenceSource seqSource = new SequenceSource(null, null, ArtemisServerResolutionManager.Get().NextSeqSourceRootID, true); // TODO
+            seqSource.SetWaitForClientEnable(true);
+            return seqSource;
+        }
+
+        protected virtual ClientResolutionAction MakeResolutionAction(
             Dictionary<ActorData, ClientActorHitResults> actorToHitResults,
             SequenceSource seqSource)
         {
@@ -141,14 +117,6 @@ namespace ArtemisServer.GameServer.Abilities
             Dictionary<Vector3, ClientPositionHitResults> posToHitResults = MakePosToHitResultsList(actorToHitResults, seqStartDataList);
             ClientAbilityResults abilityResults = new ClientAbilityResults(m_caster.ActorIndex, (int)ActionType, seqStartDataList, actorToHitResults, posToHitResults);
             return new ClientResolutionAction(ResolutionActionType.AbilityCast, abilityResults, null, null);
-        }
-
-        protected virtual Dictionary<Vector3, ClientPositionHitResults> MakePosToHitResultsList(
-             Dictionary<ActorData, ClientActorHitResults> actorToHitResults,
-             List<ServerClientUtils.SequenceStartData> seqStartDataList)
-        {
-            return new Dictionary<Vector3, ClientPositionHitResults>();
-            // TODO
         }
 
         protected virtual List<ServerClientUtils.SequenceStartData> MakeSequenceStartList(SequenceSource seqSource)
@@ -183,6 +151,47 @@ namespace ArtemisServer.GameServer.Abilities
             return null;
         }
 
+        protected virtual Dictionary<Vector3, ClientPositionHitResults> MakePosToHitResultsList(
+             Dictionary<ActorData, ClientActorHitResults> actorToHitResults,
+             List<ServerClientUtils.SequenceStartData> seqStartDataList)
+        {
+            return new Dictionary<Vector3, ClientPositionHitResults>();
+            // TODO
+        }
+
+        protected virtual void MakeAnimations(SequenceSource SeqSource)
+        {
+            Vector3 targetPos = m_ability.Targeter.LastUpdateFreePos;  // just testing
+            ActorAnimation anim = new ActorAnimation(ArtemisServerResolutionManager.Get().Turn)
+            {
+                animationIndex = (short)(ActionType + 1),
+                actionType = ActionType,
+                targetPos = targetPos, // TODO
+                actorIndex = m_caster.ActorIndex,
+                cinematicCamera = false, // TODO taunts
+                tauntNumber = -1,
+                reveal = true,
+                playOrderIndex = (sbyte)Animations.Count, // TODO sort animations?
+                groupIndex = (sbyte)Animations.Count, // TODO what is it? it seems it almost always equals playOrdexIndex
+                bounds = MakeBounds(), // TODO
+                HitActorsToDeltaHP = MakeAnimActorToDeltaHP(),
+                SeqSource = SeqSource
+            };
+            Make_000C_X_0014_Z(out anim._000C_X, out anim._0014_Z);
+
+            Animations.Add(anim);
+        }
+
+        protected virtual Bounds MakeBounds()
+        {
+            Bounds bounds = new Bounds(m_caster.CurrentBoardSquare.GetWorldPosition(), new Vector3(4, 3, 4));
+            foreach (var actorTarget in m_ability.Targeter.GetActorsInRange())
+            {
+                bounds.Encapsulate(actorTarget.m_actor.GetTravelBoardSquareWorldPosition()); // TODO hostile visibility
+            }
+            return bounds;
+        }
+
         protected virtual Dictionary<ActorData, int> MakeAnimActorToDeltaHP()
         {
             Dictionary<int, int> actorIndexToDeltaHP = Utils.GetActorIndexToDeltaHP(TargetedActors);
@@ -196,6 +205,12 @@ namespace ArtemisServer.GameServer.Abilities
                 }
             }
             return actorToDeltaHP;
+        }
+
+        protected virtual void Make_000C_X_0014_Z(out List<byte> x, out List<byte> y)
+        {
+            x = new List<byte>();
+            y = new List<byte>();
         }
     }
 }

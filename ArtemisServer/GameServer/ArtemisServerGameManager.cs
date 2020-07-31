@@ -52,7 +52,7 @@ namespace ArtemisServer.GameServer
         {
             // TODO
             Log.Info("Placing characters");
-            int x = 18;
+            int x = 16;
             int y = 9;
             foreach (var player in GameFlowData.Get().GetPlayers())
             {

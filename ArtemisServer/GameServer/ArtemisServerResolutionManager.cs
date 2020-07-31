@@ -77,8 +77,7 @@ namespace ArtemisServer.GameServer
                 GameFlowData.Get().activeOwnedActorData = null;
             }
 
-            // TODO check this
-            //sab.Networkm_abilityPhase = Phase;
+            sab.Networkm_abilityPhase = Phase; // TODO check this
 
             UpdateTheatricsPhase();
 
@@ -116,6 +115,34 @@ namespace ArtemisServer.GameServer
             return true;
         }
 
+        public void ResolveAbilities(ActorData actor, AbilityPriority priority)
+        {
+            AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
+
+            // I didn't find any code that calculates what an ability hits aside from UpdateTargeting which is
+            // used to draw targeters on the client. In order for it to work on the server we need to
+            // * set actor as active owned actor data -- calculations rely on this
+            // * AppearAtBoardSquare to set actor's current board square
+            // * patch TargeterUtils so that RemoveActorsInvisibleToClient isn't called on the server
+            // * ..?
+            foreach (ActorTargeting.AbilityRequestData ard in actor.TeamSensitiveData_authority.GetAbilityRequestData())
+            {
+                Ability ability = abilityData.GetAbilityOfActionType(ard.m_actionType);
+
+                if (ability.m_runPriority != priority)
+                {
+                    continue;
+                }
+                Log.Info($"Resolving {ability.m_abilityName} for {actor.DisplayName}");
+
+                AbilityResolver resolver = GetAbilityResolver(actor, ability, priority, ard);
+                resolver.Resolve();
+                Actions.AddRange(resolver.Actions);
+                Animations.AddRange(resolver.Animations);
+                Utils.Add(ref TargetedActors, resolver.TargetedActors);
+            }
+        }
+
         public IEnumerator WaitForTheatrics()
         {
             TheatricsPendingClients.Clear();
@@ -130,19 +157,6 @@ namespace ArtemisServer.GameServer
             {
                 yield return new WaitForSeconds(1);
             }
-        }
-
-        public void OnClientResolutionPhaseCompleted(NetworkConnection conn, GameMessageManager.ClientResolutionPhaseCompleted msg)
-        {
-            Player player = GameFlow.Get().GetPlayerFromConnectionId(conn.connectionId);
-            ActorData actor = GameFlowData.Get().FindActorByActorIndex(msg.ActorIndex);
-
-            if (actor.gameObject.GetComponent<PlayerData>().m_player.m_connectionId != conn.connectionId)
-            {
-                Log.Warning($"OnClientResolutionPhaseCompleted: {actor.DisplayName} does not belong to player {player.m_accountId}!");
-            }
-
-            TheatricsPendingClients.Remove(player.m_accountId);
         }
 
         private void UpdateTheatricsPhase()
@@ -197,41 +211,17 @@ namespace ArtemisServer.GameServer
             Theatrics.PlayPhase(phase);
         }
 
-        private void SendToAll(short msgType, MessageBase msg)
+        public void OnClientResolutionPhaseCompleted(NetworkConnection conn, GameMessageManager.ClientResolutionPhaseCompleted msg)
         {
-            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            Player player = GameFlow.Get().GetPlayerFromConnectionId(conn.connectionId);
+            ActorData actor = GameFlowData.Get().FindActorByActorIndex(msg.ActorIndex);
+
+            if (actor.gameObject.GetComponent<PlayerData>().m_player.m_connectionId != conn.connectionId)
             {
-                //if (!actor.GetPlayerDetails().IsHumanControlled) { continue; }
-                actor.connectionToClient?.Send(msgType, msg);
+                Log.Warning($"OnClientResolutionPhaseCompleted: {actor.DisplayName} does not belong to player {player.m_accountId}!");
             }
-        }
 
-        public void ResolveAbilities(ActorData actor, AbilityPriority priority)
-        {
-            AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
-
-            // I didn't find any code that calculates what an ability hits aside from UpdateTargeting which is
-            // used to draw targeters on the client. In order for it to work on the server we need to
-            // * set actor as active owned actor data -- calculations rely on this
-            // * AppearAtBoardSquare to set actor's current board square
-            // * patch TargeterUtils so that RemoveActorsInvisibleToClient isn't called on the server
-            // * ..?
-            foreach (ActorTargeting.AbilityRequestData ard in actor.TeamSensitiveData_authority.GetAbilityRequestData())
-            {
-                Ability ability = abilityData.GetAbilityOfActionType(ard.m_actionType);
-
-                if (ability.m_runPriority != priority)
-                {
-                    continue;
-                }
-                Log.Info($"Resolving {ability.m_abilityName} for {actor.DisplayName}");
-
-                AbilityResolver resolver = GetAbilityResolver(actor, ability, priority, ard);
-                resolver.Resolve();
-                Actions.AddRange(resolver.Actions);
-                Animations.AddRange(resolver.Animations);
-                Utils.Add(ref TargetedActors, resolver.TargetedActors);
-            }
+            TheatricsPendingClients.Remove(player.m_accountId);
         }
 
         private AbilityResolver GetAbilityResolver(ActorData actor, Ability ability, AbilityPriority priority, ActorTargeting.AbilityRequestData abilityRequestData)
@@ -258,6 +248,15 @@ namespace ArtemisServer.GameServer
                             break;
                     }
                 }
+            }
+        }
+
+        private void SendToAll(short msgType, MessageBase msg)
+        {
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            {
+                //if (!actor.GetPlayerDetails().IsHumanControlled) { continue; }
+                actor.connectionToClient?.Send(msgType, msg);
             }
         }
 

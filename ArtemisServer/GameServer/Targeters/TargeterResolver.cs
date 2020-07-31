@@ -7,7 +7,8 @@ namespace ArtemisServer.GameServer.Targeters
 {
     class TargeterResolver
     {
-        protected AbilityUtil_Targeter m_targeter;
+        protected AbilityUtil_Targeter m_targeterVanilla;
+        private AbilityUtil_Targeter m_targeter;
         protected AbilityTarget m_target;
         protected ActorData m_caster;
         protected Ability m_ability;
@@ -15,12 +16,19 @@ namespace ArtemisServer.GameServer.Targeters
         public TargeterResolver(AbilityUtil_Targeter targeter, AbilityTarget target, ActorData caster, Ability ability)
         {
             m_targeter = targeter;
+            m_targeterVanilla = targeter;
             m_target = target;
             m_caster = caster;
             m_ability = ability;
         }
 
         public virtual AbilityUtil_Targeter Targeter { get => m_targeter; }
+
+        protected void OverrideTargeter(AbilityUtil_Targeter targeter, int targeterIndex)
+        {
+            m_targeter = targeter;
+            m_ability.Targeters[targeterIndex] = m_targeter;
+        }
 
         public virtual void Prepare()
         {

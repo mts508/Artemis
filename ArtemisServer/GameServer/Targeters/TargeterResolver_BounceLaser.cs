@@ -7,15 +7,10 @@ namespace ArtemisServer.GameServer.Targeters
 {
 	class TargeterResolver_BounceLaser : TargeterResolver
 	{
-		Targeter_BounceLaser m_customTargeter;
-
-		public override AbilityUtil_Targeter Targeter { get => m_customTargeter; }
-
 		public TargeterResolver_BounceLaser(AbilityUtil_Targeter targeter, AbilityTarget target, ActorData caster, Ability ability, int targeterIndex)
 			: base(targeter, target, caster, ability)
 		{
-			m_customTargeter = new Targeter_BounceLaser(targeter as AbilityUtil_Targeter_BounceLaser, ability);
-			ability.Targeters[targeterIndex] = m_customTargeter;
+			OverrideTargeter(new Targeter_BounceLaser(targeter as AbilityUtil_Targeter_BounceLaser, ability), targeterIndex);
 		}
 
 		public class Targeter_BounceLaser : AbilityUtil_Targeter_BounceLaser
@@ -72,7 +67,7 @@ namespace ArtemisServer.GameServer.Targeters
 					targetingActor,
 					m_width,
 					maxTargetsHit,
-					m_includeInvisibles,
+					m_includeInvisibles, // was false
 					GetAffectedTeams(),
 					m_bounceOnActors,
 					out Dictionary<ActorData, AreaEffectUtils.BouncingLaserInfo> bounceHitActors,
@@ -92,7 +87,7 @@ namespace ArtemisServer.GameServer.Targeters
 						targetingActor,
 						m_width,
 						0,
-						m_includeInvisibles,
+						m_includeInvisibles, // was false
 						targetingActor.GetTeams(),
 						m_bounceOnActors,
 						out Dictionary<ActorData, AreaEffectUtils.BouncingLaserInfo> _,
