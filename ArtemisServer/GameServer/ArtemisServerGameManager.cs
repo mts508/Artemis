@@ -312,12 +312,21 @@ namespace ArtemisServer.GameServer
             {
                 instance = null;
             }
-            foreach (var player in GameFlowData.Get().GetPlayers())
+            if (GameFlowData.Get() != null)
             {
-                ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
-                actorTurnSM.OnCmdGUITurnMessageCallback -= CmdGUITurnMessage;
-                ActorController actorController = player.GetComponent<ActorController>();
-                actorController.OnCmdSelectAbilityRequestCallback -= CmdSelectAbilityRequest;
+                foreach (var player in GameFlowData.Get().GetPlayers())
+                {
+                    ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
+                    if (actorTurnSM != null)
+                    {
+                        actorTurnSM.OnCmdGUITurnMessageCallback -= CmdGUITurnMessage;
+                    }
+                    ActorController actorController = player.GetComponent<ActorController>();
+                    if (actorController != null)
+                    {
+                        actorController.OnCmdSelectAbilityRequestCallback -= CmdSelectAbilityRequest;
+                    }
+                }
             }
         }
 

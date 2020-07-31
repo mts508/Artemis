@@ -207,7 +207,6 @@ namespace ArtemisServer.GameServer
 
             AbilityPriority phase = Phase == AbilityPriority.NumAbilityPriorities ? AbilityPriority.INVALID : Phase;
 
-            // Theatrics.m_phaseToUpdate = phase;
             Theatrics.PlayPhase(phase);
         }
 
