@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ArtemisServer.GameServer;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,6 +25,9 @@ namespace ArtemisServer
             // AssetsLoadingProgress
             NetworkServer.RegisterHandler((short)MyMsgType.ClientAssetsLoadingProgressUpdate, new NetworkMessageDelegate(HandleAssetsLoadinProgressUpdate));
 
+
+            NetworkServer.RegisterHandler((short)MyMsgType.CastAbility, new NetworkMessageDelegate(HandleCastAbility));
+            NetworkServer.RegisterHandler((short)MyMsgType.ClientResolutionPhaseCompleted, new NetworkMessageDelegate(HandleClientResolutionPhaseCompleted));
         }
 
         private static void HandleAddPlayer(NetworkMessage message)
@@ -34,12 +38,14 @@ namespace ArtemisServer
 
         private static void HandleLoginRequest(NetworkMessage message)
         {
+            // TODO client will send login request again in case of connection timeout
             Log.Info("LOGIN REQUEST");
             GameManager.LoginRequest loginRequest = message.ReadMessage<GameManager.LoginRequest>();
 
             Player player = GameFlow.Get().GetPlayerFromConnectionId(message.conn.connectionId);
             if (player.m_connectionId != message.conn.connectionId)
             {
+                Log.Info($"New player AccountID:{loginRequest.AccountId} PlayerId:{loginRequest.PlayerId} SessionToken:{loginRequest.SessionToken}");
                 player = new Player(message.conn, Convert.ToInt64(loginRequest.AccountId));  // PATCH internal -> public Player::Player
 
                 GameFlow.Get().playerDetails[player] = new PlayerDetails(PlayerGameAccountType.Human)
@@ -50,6 +56,7 @@ namespace ArtemisServer
                     m_idleTurns = 0,
                     m_team = Team.Invalid
                 };
+                Log.Info($"Registered AccountID:{player.m_accountId}");
             }
 
             GameManager.LoginResponse loginResponse = new GameManager.LoginResponse()
@@ -85,6 +92,81 @@ namespace ArtemisServer
             GameManager.AssetsLoadingProgress loadingProgress = message.ReadMessage<GameManager.AssetsLoadingProgress>();
             Log.Info("LOADINGPROGRESS -> " + loadingProgress.TotalLoadingProgress);
             message.conn.SendByChannel(62, loadingProgress, message.channelId);
+        }
+
+        private static void HandleCastAbility(NetworkMessage message)
+        {
+            CastAbility castAbility = message.ReadMessage<CastAbility>();
+            Log.Info($"CASTABILITY -> caster: {castAbility.CasterIndex}, action: {castAbility.ActionType}, {castAbility.Targets.Count} targets");
+            ArtemisServerGameManager gameManager = ArtemisServerGameManager.Get();
+            if (gameManager == null)
+            {
+                Log.Info($"CASTABILITY ignored");
+            }
+            else
+            {
+                gameManager.OnCastAbility(message.conn, castAbility.CasterIndex, castAbility.ActionType, castAbility.Targets);
+            }
+        }
+
+        private static void HandleClientResolutionPhaseCompleted(NetworkMessage message)
+        {
+            ClientResolutionPhaseCompleted msg = message.ReadMessage<ClientResolutionPhaseCompleted>();
+            Log.Info($"CLIENTRESOLUTIONPHASECOMPLETED -> actor: {msg.ActorIndex}, phase: {msg.AbilityPhase}, failsafe: {msg.AsFailsafe}, resend: {msg.AsResend}");
+            ArtemisServerResolutionManager resolutionManager = ArtemisServerResolutionManager.Get();
+            if (resolutionManager == null)
+            {
+                Log.Info($"CLIENTRESOLUTIONPHASECOMPLETED ignored");
+            }
+            else
+            {
+                resolutionManager.OnClientResolutionPhaseCompleted(message.conn, msg);
+            }
+        }
+
+        public class CastAbility : MessageBase
+        {
+            public int CasterIndex;
+            public int ActionType;
+            public List<AbilityTarget> Targets;
+
+            public override void Serialize(NetworkWriter writer)
+            {
+                writer.Write(CasterIndex);
+                writer.Write(ActionType);
+                AbilityTarget.SerializeAbilityTargetList(Targets, writer);
+            }
+
+            public override void Deserialize(NetworkReader reader)
+            {
+                CasterIndex = reader.ReadInt32();
+                ActionType = reader.ReadInt32();
+                Targets = AbilityTarget.DeSerializeAbilityTargetList(reader);
+            }
+        }
+
+        public class ClientResolutionPhaseCompleted : MessageBase
+        {
+            public AbilityPriority AbilityPhase;
+            public int ActorIndex;
+            public bool AsFailsafe;
+            public bool AsResend;
+
+            public override void Serialize(NetworkWriter writer)
+            {
+                writer.Write((sbyte)AbilityPhase);
+                writer.Write(ActorIndex);
+                writer.Write(AsFailsafe);
+                writer.Write(AsResend);
+            }
+
+            public override void Deserialize(NetworkReader reader)
+            {
+                AbilityPhase = (AbilityPriority)reader.ReadSByte();
+                ActorIndex = reader.ReadInt32();
+                AsFailsafe = reader.ReadBoolean();
+                AsResend = reader.ReadBoolean();
+            }
         }
     }
 }

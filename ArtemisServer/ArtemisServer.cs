@@ -1,5 +1,6 @@
 using ArtemisServer;
 using ArtemisServer.BridgeServer;
+using ArtemisServer.GameServer;
 using ArtemisServer.Map;
 using System;
 using System.Collections;
@@ -21,10 +22,15 @@ namespace Artemis
         public static String Address = "127.0.0.1";
         public static int Port = 6061;
         ArtemisServerComponent artemisServerComponent;
+        public SharedActionBuffer SharedActionBuffer;
 
         public void Start()
         {
             instance = this;
+
+            // TODO Look into state usage on server side
+            // Creating Teardown because GameFlowData checks if it isn't the current state, and null == null
+            AppState_GameTeardown.Create();
 
             Log.Info("Starting Server...");
             UIFrontendLoadingScreen.Get().StartDisplayError("Starting Server...");
@@ -93,23 +99,26 @@ namespace Artemis
 
             Log.Info($"Add Character {resourceLink.GetDisplayName()} for player {playerInfo.Handle}");
 
-            GameObject atsd = SpawnObject("ActorTeamSensitiveData_Friendly", false);
+            GameObject atsdObject = SpawnObject("ActorTeamSensitiveData_Friendly", false);
             GameObject character = GameObject.Instantiate(resourceLink.ActorDataPrefab);
 
             ActorData actorData = character.GetComponent<ActorData>();
-
+            ActorTeamSensitiveData atsd = atsdObject.GetComponent<ActorTeamSensitiveData>();
             actorData.SetupAbilityMods(playerInfo.CharacterInfo.CharacterMods); //#
-
             actorData.PlayerIndex = playerInfo.PlayerId;
+            actorData.ActorIndex = playerInfo.PlayerId;
+            atsd.SetActorIndex(actorData.ActorIndex); // PATCH private -> public ActorTeamSensitiveData.SetActorIndex
             PlayerData playerData = character.GetComponent<PlayerData>();
             playerData.PlayerIndex = playerInfo.PlayerId;
             
             actorData.SetTeam(playerInfo.TeamId);
             actorData.UpdateDisplayName(playerInfo.Handle);
-            actorData.PlayerIndex = playerInfo.PlayerId;
-            actorData.SetClientFriendlyTeamSensitiveData(atsd.GetComponent<ActorTeamSensitiveData>());
-            NetworkServer.Spawn(atsd);
+            actorData.SetClientFriendlyTeamSensitiveData(atsd);
+            NetworkServer.Spawn(atsdObject);
             NetworkServer.Spawn(character);
+            // For some reason, when you spawn atsd first, you see enemy characters, and when you spawn character first, you don't
+            // They get lost because enemies are not YET registered in GameFlowData actors when TeamSensitiveDataMatchmaker.SetTeamSensitiveDataForUnhandledActors is called
+            // TODO add hostile atsds and connect friendly/hostile ones to respective clients (Patch in ATSD.OnCheck/RebuildObservers) 
         }
 
         private void LoadMap()
@@ -171,18 +180,20 @@ namespace Artemis
 
             SpawnObject("ApplicationSingletonsNetId");
             var gameSceneSingletons = SpawnObject("GameSceneSingletons");
-            var cameraMan = gameSceneSingletons.GetComponent<CameraManager>();
-            if (cameraMan != null)
-            {
-                GameObject.Destroy(cameraMan);
-            }
-            else
-            {
-                Log.Info("CameraManager is null");
-            }
+            gameSceneSingletons.SetActive(true);
+            //var cameraMan = gameSceneSingletons.GetComponent<CameraManager>();
+            //if (cameraMan != null)
+            //{
+            //    GameObject.Destroy(cameraMan);
+            //}
+            //else
+            //{
+            //    Log.Info("CameraManager is null");
+            //}
             var SharedEffectBarrierManager = SpawnObject("SharedEffectBarrierManager");
-            var SharedActionBuffer = SpawnObject("SharedActionBuffer");
-            SharedActionBuffer.GetComponent<SharedActionBuffer>().Networkm_actionPhase = ActionBufferPhase.Done;
+            var SharedActionBufferObject = SpawnObject("SharedActionBuffer");
+            SharedActionBuffer = SharedActionBufferObject.GetComponent<SharedActionBuffer>();
+            SharedActionBuffer.Networkm_actionPhase = ActionBufferPhase.Done;
 
             foreach (GameObject sceneObject in scene.GetRootGameObjects())
             {
@@ -193,6 +204,8 @@ namespace Artemis
                     NetworkServer.Spawn(sceneObject);
                 }
             }
+
+            GameFlowData.Get().gameState = GameState.SpawningPlayers;
 
             bool destroyVisualsLoader = false;
             if (destroyVisualsLoader)
@@ -215,8 +228,13 @@ namespace Artemis
                 AddCharacterActor(playerInfo);
             }
 
+            GameFlowData.Get().Networkm_currentTurn = 0;
+            GameFlowData.Get().gameState = GameState.StartingGame;
+
             // Show what objects are present in the current scene
             UnityUtils.DumpSceneObjects();
+
+            WebsocketManager.ReportGameReady(); // Not sure where exactly it is supposed to happen
         }
 
         public static ArtemisServer Get() { return instance; }
@@ -228,6 +246,7 @@ namespace Artemis
             {
                 GameObject character = playerActor.gameObject;
                 character.GetComponent<PlayerData>().m_player = player;  // PATCH internal -> public PlayerData::m_player
+                GameFlow.Get().playerDetails[player]?.m_gameObjects.Add(character);
                 Log.Info($"Registered player with account id {player.m_accountId} as player {playerIndex} ({character.name})");
                 NetworkServer.AddPlayerForConnection(connection, character, 0);
             }
@@ -237,24 +256,13 @@ namespace Artemis
         {
             foreach (NetworkIdentity networkIdentity in NetworkServer.objects.Values)
             {
-                Log.Info($"Network idenity: '{networkIdentity.name}' [{networkIdentity.connectionToClient?.connectionId}] {networkIdentity.observers.Count} observers");
+                Log.Info($"Network identity: '{networkIdentity.name}' [{networkIdentity.connectionToClient?.connectionId}] {networkIdentity.observers.Count} observers");
             }
 
-            GameFlowData.Get().enabled = true;
-            GameFlowData.Get().Networkm_gameState = GameState.StartingGame;
-            GameFlowData.Get().Networkm_gameState = GameState.Deployment;
-            GameFlowData.Get().Networkm_gameState = GameState.BothTeams_Decision;
-            GameFlowData.Get().Networkm_willEnterTimebankMode = false;
-            GameFlowData.Get().Networkm_timeRemainingInDecisionOverflow = 10;
-
-            foreach (var actor in GameFlowData.Get().GetActors())
-            {
-                var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
-                turnSm.CallRpcTurnMessage((int)TurnMessage.TURN_START, 0);
-                //actor.MoveFromBoardSquare = actor.TeamSensitiveData_authority.MoveFromBoardSquare;
-                //UpdatePlayerMovement(player);
-            }
-            //BarrierManager.Get().CallRpcUpdateBarriers();
+            artemisServerComponent.gameObject.AddComponent<ArtemisServerMovementManager>();
+            artemisServerComponent.gameObject.AddComponent<ArtemisServerResolutionManager>();
+            ArtemisServerGameManager gm = artemisServerComponent.gameObject.AddComponent<ArtemisServerGameManager>();
+            gm.StartGame();
         }
 
         public static void SetGameInfo(LobbyGameInfo gameInfo)

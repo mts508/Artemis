@@ -71,6 +71,15 @@
     <Compile Include="ArtemisServerComponent.cs" />
     <Compile Include="BridgeServer\WebsocketManager.cs" />
     <Compile Include="GameMessageManager.cs" />
+    <Compile Include="GameServer\Abilities\AbilityResolver.cs" />
+    <Compile Include="GameServer\Abilities\AbilityResolver_TrickShot.cs" />
+    <Compile Include="GameServer\ArtemisServerGameManager.cs" />
+    <Compile Include="GameServer\ArtemisServerMovementManager.cs" />
+    <Compile Include="GameServer\ArtemisServerResolutionManager.cs" />
+    <Compile Include="GameServer\ClientActorHitResultsBuilder.cs" />
+    <Compile Include="GameServer\Targeters\TargeterResolver.cs" />
+    <Compile Include="GameServer\Targeters\TargeterResolver_BounceLaser.cs" />
+    <Compile Include="GameServer\Utils.cs" />
     <Compile Include="Map\CommonObjectsSpawner.cs" />
     <Compile Include="Map\PlayerSpawner.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
