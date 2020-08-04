@@ -48,10 +48,11 @@ namespace ArtemisServer.GameServer
         private List<ClientGameModeEvent> m_gameModeEvents = new List<ClientGameModeEvent>();
         private List<int> m_overconIds = new List<int>();
 
-        public ClientActorHitResultsBuilder SetDamage(int finalDamage, Vector3 origin, bool boosted, bool reduced)
+        public ClientActorHitResultsBuilder SetDamage(int finalDamage, Vector3 origin, bool targetInCoverWrtDamage, bool boosted, bool reduced)
         {
             m_hasDamage = true;
             m_finalDamage = finalDamage;
+            m_targetInCoverWrtDamage = targetInCoverWrtDamage;
             m_damageBoosted = boosted;
             m_damageReduced = reduced;
             m_damageHitOrigin = origin;

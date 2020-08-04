@@ -128,6 +128,7 @@ namespace ArtemisServer.GameServer
             // * set actor as active owned actor data -- calculations rely on this
             // * AppearAtBoardSquare to set actor's current board square
             // * patch TargeterUtils so that RemoveActorsInvisibleToClient isn't called on the server
+            // * disable ActorData.IsVisibleToClient on server (break cover otherwise)
             // * ..?
             foreach (ActorTargeting.AbilityRequestData ard in actor.TeamSensitiveData_authority.GetAbilityRequestData())
             {
