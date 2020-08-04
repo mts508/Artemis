@@ -31,6 +31,7 @@ internal bool \u000E() -> public bool IsDead()
 internal -> public void SetHitPoints(int value)
 internal -> public void SetAbsorbPoints(int value)
 internal -> public get_HitPoints
+internal -> public get_TechPoints
 public BoardSquare \u000E() -> public BoardSquare GetTravelBoardSquare() 
 public Team \u000E() -> public Team GetTeam()
 internal ActorCover \u000E() -> internal ActorCover GetActorCover()
@@ -45,6 +46,7 @@ public Vector3 \u0012(BoardSquare \u001D) -> public Vector3 GetSquareWorldPositi
 public List<Team> \u000E() -> public List<Team> GetOtherTeams()
 public List<Team> \u0012() -> public List<Team> GetTeams()
 public List<Team> \u0015() -> public List<Team> GetEnemyTeams()
+internal -> public void SetTechPoints(int value, bool combatText = false, ActorData caster = null, string sourceName = null)
 
 ## CameraManager.cs
 in Update

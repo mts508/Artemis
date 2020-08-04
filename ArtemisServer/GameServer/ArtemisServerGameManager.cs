@@ -86,6 +86,7 @@ namespace ArtemisServer.GameServer
                 yield return new WaitForSeconds(1);
                 yield return ActionResolution();
                 yield return MovementResolution();
+                ArtemisServerResolutionManager.Get().ApplyTargets();
             }
         }
 
@@ -137,8 +138,6 @@ namespace ArtemisServer.GameServer
             {
                 hasNextPhase = ArtemisServerResolutionManager.Get().ResolveNextPhase();
                 yield return ArtemisServerResolutionManager.Get().WaitForTheatrics();
-                yield return new WaitForSeconds(.1f);
-                ArtemisServerResolutionManager.Get().ApplyTargets();
             }
             yield return new WaitForSeconds(1);
             foreach (ActorData actor in GameFlowData.Get().GetActors())
