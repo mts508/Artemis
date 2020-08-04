@@ -46,6 +46,10 @@ public Vector3 \u0012(BoardSquare \u001D) -> public Vector3 GetSquareWorldPositi
 public List<Team> \u000E() -> public List<Team> GetOtherTeams()
 public List<Team> \u0012() -> public List<Team> GetTeams()
 public List<Team> \u0015() -> public List<Team> GetEnemyTeams()
+public bool \u000E(PlayerData \u001D, bool \u000E = true) -> public bool IsRevealed(PlayerData observer, bool includePendingStatus = true)
+public bool \u000E(PlayerData \u001D, bool \u000E = true, bool \u0012 = false) -> public bool IsHidden(PlayerData observer, bool includePendingStatus = true, bool forceViewingTeam = false)
+public bool \u000E(ActorData \u001D, bool \u000E = false) -> public bool IsActorVisibleToActor(ActorData observer, bool forceViewingTeam = false)
+public bool \u0009() -> public bool IsVisibleToEnemyTeam()
 internal -> public void SetTechPoints(int value, bool combatText = false, ActorData caster = null, string sourceName = null)
 
 ## CameraManager.cs
