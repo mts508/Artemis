@@ -112,6 +112,10 @@ public bool \u000E(PlayerData \u001D, bool \u000E = true, bool \u0012 = false) -
 public bool \u000E(ActorData \u001D, bool \u000E = false) -> public bool IsActorVisibleToActor(ActorData observer, bool forceViewingTeam = false)
 public bool \u0009() -> public bool IsVisibleToEnemyTeam()
 internal -> public void SetTechPoints(int value, bool combatText = false, ActorData caster = null, string sourceName = null)
+TeleportType.\u001D -> TeleportType.Unused
+<>f__mg$cache0 -> __f__mg_cache0
+<>f__mg$cache1 -> __f__mg_cache1
+<>f__mg$cache2 -> __f__mg_cache2
 
 ## CameraManager.cs
 in Update

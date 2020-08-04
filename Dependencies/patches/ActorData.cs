@@ -29,4 +29,16 @@ public class ActorData : NetworkBehaviour, IGameEventListener
 	{
 		return this.m_freelancerStats;
 	}
+	
+	public bool IsVisibleToClient()
+	{
+		// Added server shortcut
+		// Use IsActorVisibleToActor/IsVisibleToEnemyTeam on server
+		if (NetworkServer.active)
+		{
+			return true;
+		}
+		this.UpdateIsVisibleToClientCache();
+		return this.m_isVisibleToClientCache;
+	}
 }
