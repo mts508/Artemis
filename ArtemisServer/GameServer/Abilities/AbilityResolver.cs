@@ -16,6 +16,7 @@ namespace ArtemisServer.GameServer.Abilities
         public Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActors;
         public List<ClientResolutionAction> Actions;
         public List<ActorAnimation> Animations;
+        public List<Barrier> Barriers;
 
         protected TargeterResolver CurrentTargeterResolver { get; private set; }
 
@@ -34,7 +35,12 @@ namespace ArtemisServer.GameServer.Abilities
             TargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
             Actions = new List<ClientResolutionAction>();
             Animations = new List<ActorAnimation>();
+            Barriers = new List<Barrier>();
+            ResolveImpl();
+        }
 
+        protected virtual void ResolveImpl()
+        {
             List<TargeterResolver> targeterResolvers = new List<TargeterResolver>();
 
             for (int i = 0; i < m_abilityRequestData.m_targets.Count; ++i)
@@ -59,6 +65,7 @@ namespace ArtemisServer.GameServer.Abilities
                 Dictionary<ActorData, ClientActorHitResults> actorToHitResults = new Dictionary<ActorData, ClientActorHitResults>();
                 foreach (var targetedActor in TargetedActors)
                 {
+                    CurrentTargeterResolver.Targeter.GetActorContextVars().TryGetValue(targetedActor.Key, out var hitContext);
                     foreach (var symbol in targetedActor.Value)
                     {
                         ClientActorHitResults hitResults;
@@ -80,6 +87,7 @@ namespace ArtemisServer.GameServer.Abilities
                 }
 
                 SequenceSource seqSource = MakeSequenceSource();
+                MakeBarriers(seqSource);
                 Actions.Add(MakeResolutionAction(actorToHitResults, seqSource));
                 MakeAnimations(seqSource);
             }
@@ -108,6 +116,11 @@ namespace ArtemisServer.GameServer.Abilities
             SequenceSource seqSource = new SequenceSource(null, null, ArtemisServerResolutionManager.Get().NextSeqSourceRootID, true); // TODO
             seqSource.SetWaitForClientEnable(true);
             return seqSource;
+        }
+
+        protected virtual void MakeBarriers(SequenceSource seqSource)
+        {
+
         }
 
         protected virtual ClientResolutionAction MakeResolutionAction(
@@ -162,12 +175,11 @@ namespace ArtemisServer.GameServer.Abilities
 
         protected virtual void MakeAnimations(SequenceSource SeqSource)
         {
-            Vector3 targetPos = m_ability.Targeter.LastUpdateFreePos;  // just testing
             ActorAnimation anim = new ActorAnimation(ArtemisServerResolutionManager.Get().Turn)
             {
                 animationIndex = (short)(ActionType + 1),
                 actionType = ActionType,
-                targetPos = targetPos, // TODO
+                targetPos = GetTargetPos(), // TODO
                 actorIndex = m_caster.ActorIndex,
                 cinematicCamera = false, // TODO taunts
                 tauntNumber = -1,
@@ -183,6 +195,11 @@ namespace ArtemisServer.GameServer.Abilities
             Animations.Add(anim);
         }
 
+        protected virtual Vector3 GetTargetPos()
+        {
+            return m_ability.Targeter.LastUpdateFreePos;
+        }
+
         protected virtual Bounds MakeBounds()
         {
             Bounds bounds = new Bounds(m_caster.CurrentBoardSquare.GetWorldPosition(), new Vector3(4, 3, 4));
@@ -190,6 +207,7 @@ namespace ArtemisServer.GameServer.Abilities
             {
                 bounds.Encapsulate(actorTarget.m_actor.GetTravelBoardSquareWorldPosition()); // TODO hostile visibility
             }
+            bounds.Encapsulate(GetTargetPos());
             return bounds;
         }
 

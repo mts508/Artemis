@@ -117,6 +117,10 @@ TeleportType.\u001D -> TeleportType.Unused
 <>f__mg$cache1 -> __f__mg_cache1
 <>f__mg$cache2 -> __f__mg_cache2
 
+## Barrier.cs
+internal -> public static BarrierSerializeInfo BarrierToSerializeInfo(Barrier barrier)
+internal -> public static Barrier CreateBarrierFromSerializeInfo(BarrierSerializeInfo info)
+
 ## CameraManager.cs
 in Update
 	if (!this.GetFlyThroughCamera().enabled) -> if (!this.GetFlyThroughCamera()?.enabled ?? false)

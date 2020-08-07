@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using UnityEngine;
 
 namespace ArtemisServer.GameServer
 {
@@ -40,6 +41,38 @@ namespace ArtemisServer.GameServer
                     dst[targetActor][symbolToValue.Key] += symbolToValue.Value;
                 }
             }
+        }
+
+        public static Barrier ConsBarrier(
+            ActorData caster,
+            StandardBarrierData data,
+            Vector3 targetPos,
+            Vector3 facingDir,
+            SequenceSource seqSource,
+            List<GameObject> prefabOverride = null)
+        {
+            return new Barrier(
+                    ArtemisServerResolutionManager.Get().NextBarrierGuid,
+                    "",
+                    targetPos,
+                    facingDir,
+                    data.m_width,
+                    data.m_bidirectional,
+                    data.m_blocksVision,
+                    data.m_blocksAbilities,
+                    data.m_blocksMovement,
+                    data.m_blocksPositionTargeting,
+                    data.m_considerAsCover,
+                    data.m_maxDuration,
+                    caster,
+                    prefabOverride ?? data.m_barrierSequencePrefabs,
+                    true,
+                    data.m_onEnemyMovedThrough,
+                    data.m_onAllyMovedThrough,
+                    data.m_maxHits,
+                    data.m_endOnCasterDeath,
+                    seqSource,
+                    caster.GetTeam());
         }
     }
 }

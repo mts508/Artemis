@@ -15,12 +15,15 @@ namespace ArtemisServer.GameServer
         private Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActorsThisPhase;
         private List<ClientResolutionAction> Actions;
         private List<ActorAnimation> Animations;
+        private List<Barrier> Barriers;
         internal AbilityPriority Phase { get; private set; }
         internal Turn Turn;
 
         private uint m_nextSeqSourceRootID = 0;
+        private int m_nextBarrierGuid = 0;
 
         public uint NextSeqSourceRootID => m_nextSeqSourceRootID++;
+        public int NextBarrierGuid => m_nextBarrierGuid++;
 
         private HashSet<long> TheatricsPendingClients = new HashSet<long>();
 
@@ -48,6 +51,7 @@ namespace ArtemisServer.GameServer
             TargetedActorsThisPhase = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
             Actions = new List<ClientResolutionAction>();
             Animations = new List<ActorAnimation>();
+            Barriers = new List<Barrier>();
 
             var sab = Artemis.ArtemisServer.Get().SharedActionBuffer;
 
@@ -115,6 +119,11 @@ namespace ArtemisServer.GameServer
                 });
             }
 
+            foreach (Barrier barrier in Barriers)
+            {
+                BarrierManager.Get().AddBarrier(barrier, true, out var _);
+            }
+
             // TODO process ClientResolutionManager.SendResolutionPhaseCompleted
             return true;
         }
@@ -145,6 +154,7 @@ namespace ArtemisServer.GameServer
                 Actions.AddRange(resolver.Actions);
                 Animations.AddRange(resolver.Animations);
                 Utils.Add(ref TargetedActorsThisPhase, resolver.TargetedActors);
+                Barriers.AddRange(resolver.Barriers);
             }
         }
 
@@ -232,7 +242,13 @@ namespace ArtemisServer.GameServer
         {
             if (ability.m_abilityName == "Trick Shot")
             {
+                Log.Info("AbilityResolver_TrickShot");
                 return new AbilityResolver_TrickShot(actor, ability, priority, abilityRequestData);
+            }
+            else if (ability.m_abilityName == "Trapwire")
+            {
+                Log.Info("AbilityResolver_TrapWire");
+                return new AbilityResolver_TrapWire(actor, ability, priority, abilityRequestData);
             }
             return new AbilityResolver(actor, ability, priority, abilityRequestData);
         }
