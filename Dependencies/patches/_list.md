@@ -121,6 +121,9 @@ TeleportType.\u001D -> TeleportType.Unused
 internal -> public static BarrierSerializeInfo BarrierToSerializeInfo(Barrier barrier)
 internal -> public static Barrier CreateBarrierFromSerializeInfo(BarrierSerializeInfo info)
 
+## BarrierManager.cs
+private -> public List<Barrier> m_barriers = new List<Barrier>();
+
 ## CameraManager.cs
 in Update
 	if (!this.GetFlyThroughCamera().enabled) -> if (!this.GetFlyThroughCamera()?.enabled ?? false)

@@ -75,6 +75,8 @@ namespace ArtemisServer.GameServer.Abilities
                                 CurrentTargeterResolver.Targeter.IsActorInTargetRange(targetedActor.Key, out bool inCover);
                                 hitResults = new ClientActorHitResultsBuilder()
                                     .SetDamage(symbol.Value, Vector3.zero, inCover, false, false)  // TODO
+                                    .SetRevealCaster()  // TODO
+                                    .SetRevealTarget()  // TODO
                                     .Build();
                                 Log.Info($"HitResults: damage: {symbol.Value}");
                                 break;

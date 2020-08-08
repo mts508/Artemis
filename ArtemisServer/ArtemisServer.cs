@@ -261,6 +261,7 @@ namespace Artemis
 
             artemisServerComponent.gameObject.AddComponent<ArtemisServerMovementManager>();
             artemisServerComponent.gameObject.AddComponent<ArtemisServerResolutionManager>();
+            artemisServerComponent.gameObject.AddComponent<ArtemisServerBarrierManager>();
             ArtemisServerGameManager gm = artemisServerComponent.gameObject.AddComponent<ArtemisServerGameManager>();
             gm.StartGame();
         }

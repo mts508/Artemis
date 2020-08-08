@@ -22,7 +22,7 @@ namespace ArtemisServer.GameServer
         private uint m_nextSeqSourceRootID = 0;
         private int m_nextBarrierGuid = 0;
 
-        public uint NextSeqSourceRootID => m_nextSeqSourceRootID++;
+        public uint NextSeqSourceRootID => m_nextSeqSourceRootID++;  // TODO check SequenceSource.s_nextID
         public int NextBarrierGuid => m_nextBarrierGuid++;
 
         private HashSet<long> TheatricsPendingClients = new HashSet<long>();
@@ -122,6 +122,7 @@ namespace ArtemisServer.GameServer
             foreach (Barrier barrier in Barriers)
             {
                 BarrierManager.Get().AddBarrier(barrier, true, out var _);
+                // TODO AddBarrier updates ability blocking. Should we update vision/movement/cover?
             }
 
             // TODO process ClientResolutionManager.SendResolutionPhaseCompleted

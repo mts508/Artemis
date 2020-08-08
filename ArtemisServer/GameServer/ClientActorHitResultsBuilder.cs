@@ -24,8 +24,8 @@ namespace ArtemisServer.GameServer
         private bool m_damageBoosted = false;
         private bool m_damageReduced = false;
         private bool m_isPartOfHealOverTime = false;
-        private bool m_updateCasterLastKnownPos = true;
-        private bool m_updateTargetLastKnownPos = true;
+        private bool m_updateCasterLastKnownPos = false;
+        private bool m_updateTargetLastKnownPos = false;
         private bool m_triggerCasterVisOnHitVisualOnly = false;
         private bool m_updateEffectHolderLastKnownPos = false;
         private ActorData m_effectHolderActor = null;
@@ -56,6 +56,24 @@ namespace ArtemisServer.GameServer
             m_damageBoosted = boosted;
             m_damageReduced = reduced;
             m_damageHitOrigin = origin;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetRevealCaster(bool updateCasterLastKnownPos = true)
+        {
+            m_updateCasterLastKnownPos = updateCasterLastKnownPos;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetRevealTarget(bool updateTargetLastKnownPos = true)
+        {
+            m_updateTargetLastKnownPos = updateTargetLastKnownPos;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetCanBeReactedTo(bool canBeReactedTo = true)
+        {
+            m_canBeReactedTo = canBeReactedTo;
             return this;
         }
 

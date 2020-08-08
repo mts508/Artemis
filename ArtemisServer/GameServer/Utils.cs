@@ -51,6 +51,7 @@ namespace ArtemisServer.GameServer
             SequenceSource seqSource,
             List<GameObject> prefabOverride = null)
         {
+            Log.Info($"Spawning barrier by {caster.DisplayName}: max duration {data.m_maxDuration}, max hits {data.m_maxHits}, end on caster death {data.m_endOnCasterDeath}");
             return new Barrier(
                     ArtemisServerResolutionManager.Get().NextBarrierGuid,
                     "",

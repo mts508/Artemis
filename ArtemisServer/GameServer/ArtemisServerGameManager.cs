@@ -107,7 +107,8 @@ namespace ArtemisServer.GameServer
                 actor.TeamSensitiveData_authority.SetAbilityRequestData(new List<ActorTargeting.AbilityRequestData>());
                 turnSm.CallRpcTurnMessage((int)TurnMessage.TURN_START, 0);
             }
-            //BarrierManager.Get().CallRpcUpdateBarriers();
+            ArtemisServerBarrierManager.Get().UpdateTurn();
+            SharedEffectBarrierManager.Get().UpdateTurn();
 
             Log.Info("TurnDecision");
 
