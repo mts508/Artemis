@@ -346,5 +346,35 @@ namespace ArtemisServer.GameServer
                 Action = ClientResolutionAction.ClientResolutionAction_DeSerializeFromStream(ref stream);
             }
         }
+
+        public class ResolutionActionsOutsideResolve : MessageBase
+        {
+            public List<ClientResolutionAction> Actions;
+
+            public override void Serialize(NetworkWriter writer)
+            {
+                int num = Actions?.Count ?? 0;
+                writer.Write((sbyte)num);
+                if (num > 0)
+                {
+                    IBitStream stream = new NetworkWriterAdapter(writer);
+                    foreach (ClientResolutionAction action in Actions)
+                    {
+                        action.ClientResolutionAction_SerializeToStream(ref stream);
+                    }
+                }
+            }
+
+            public override void Deserialize(NetworkReader reader)
+            {
+                int num = reader.ReadSByte();
+                IBitStream stream = new NetworkReaderAdapter(reader);
+                Actions = new List<ClientResolutionAction>(num);
+                for (int i = 0; i < num; i++)
+                {
+                    Actions.Add(ClientResolutionAction.ClientResolutionAction_DeSerializeFromStream(ref stream));
+                }
+            }
+        }
     }
 }
