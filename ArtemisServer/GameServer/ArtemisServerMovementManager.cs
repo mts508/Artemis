@@ -9,52 +9,50 @@ namespace ArtemisServer.GameServer
     {
         private static ArtemisServerMovementManager instance;
 
-        internal void UpdatePlayerMovement(ActorData actor, bool send = true)
+        private float GetActorMovementCost(ActorData actor, out float lastStepCost)
+        {
+            float movementCost = 0;
+            lastStepCost = 0;
+            ActorMovement actorMovement = actor.GetActorMovement();
+            LineData.LineInstance movementLine = actor.TeamSensitiveData_authority.MovementLine;
+            if (movementLine != null)
+            {
+                GridPos prevPos = actor.InitialMoveStartSquare.GetGridPosition();
+                foreach (var curPos in movementLine.m_positions)
+                {
+                    lastStepCost = actorMovement.BuildPathTo(Board.Get().GetSquare(prevPos), Board.Get().GetSquare(curPos)).next?.moveCost ?? 0f;  // TODO optimize this atrocity
+                    movementCost += lastStepCost;
+                    prevPos = curPos;
+                }
+            }
+            return movementCost;
+        }
+
+        internal void UpdatePlayerRemainingMovement(ActorData actor, bool send = true)
         {
             ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
             ActorController actorController = actor.gameObject.GetComponent<ActorController>();
             ActorMovement actorMovement = actor.GetActorMovement();
 
-            float movementCost = 0;
-            float cost = 0;
-            GridPos prevPos = actor.InitialMoveStartSquare.GetGridPosition();
-
-            LineData.LineInstance movementLine = actor.TeamSensitiveData_authority.MovementLine;
-            if (movementLine != null)
-            {
-                foreach (var curPos in movementLine.m_positions)
-                {
-                    cost = actorMovement.BuildPathTo(Board.Get().GetSquare(prevPos), Board.Get().GetSquare(curPos)).next?.moveCost ?? 0f;  // TODO optimize this atrocity
-                    movementCost += cost;
-                    prevPos = curPos;
-                }
-            }
+            float movementCost = GetActorMovementCost(actor, out float lastStepCost);
 
             bool cannotExceedMaxMovement = GameplayData.Get()?.m_movementMaximumType == GameplayData.MovementMaximumType.CannotExceedMax;
 
             List<ActorTargeting.AbilityRequestData> abilityRequest = actor.TeamSensitiveData_authority.GetAbilityRequestData();
             bool abilitySet = !abilityRequest.IsNullOrEmpty() && abilityRequest[0].m_actionType != AbilityData.ActionType.INVALID_ACTION;
-
-            //foreach (var a in abilityRequest)
-            //{
-            //    Log.Info($"Ability target: {a.m_actionType} {a.m_targets}");
-            //}
-
-            actor.m_postAbilityHorizontalMovement = actorMovement.GetAdjustedMovementFromBuffAndDebuff(4, true);  // TODO Get default movement ranges
-            actor.m_maxHorizontalMovement = actorMovement.GetAdjustedMovementFromBuffAndDebuff(8, false);
-            // TODO check AbilityData.GetQueuedAbilitiesAllowMovement/Sprinting etc
-
-            actor.RemainingHorizontalMovement = (abilitySet ? actor.m_postAbilityHorizontalMovement : actor.m_maxHorizontalMovement) - movementCost;
-            actor.RemainingMovementWithQueuedAbility = actor.m_postAbilityHorizontalMovement - movementCost;
-            actor.QueuedMovementAllowsAbility = abilitySet || 
+            actor.RemainingHorizontalMovement = actorMovement.CalculateMaxHorizontalMovement() - movementCost;
+            actor.RemainingMovementWithQueuedAbility = abilitySet ? actor.RemainingHorizontalMovement : actorMovement.CalculateMaxHorizontalMovement(true) - movementCost;
+            actor.QueuedMovementAllowsAbility = abilitySet ||
                 (cannotExceedMaxMovement
-                    ? movementCost <= actor.m_postAbilityHorizontalMovement
-                    : movementCost - cost < actor.m_postAbilityHorizontalMovement);
+                    ? actor.RemainingMovementWithQueuedAbility >= 0
+                    : actor.RemainingMovementWithQueuedAbility + lastStepCost > 0);
 
-            Log.Info($"UpdatePlayerMovement: Basic: {actor.m_postAbilityHorizontalMovement}/{actor.m_maxHorizontalMovement}, " +
+            Log.Info($"UpdatePlayerMovement:  Basic: {actor.m_postAbilityHorizontalMovement}/{actor.m_maxHorizontalMovement}, +", 
                 $"Remaining: {actor.RemainingMovementWithQueuedAbility}/{actor.RemainingHorizontalMovement}, " +
-                $"Movement cost: {movementCost}, Ability set: {abilitySet}, Ability allowed: {actor.QueuedMovementAllowsAbility}");
+                $"Movement cost: {movementCost}, Ability set: {abilitySet}, Ability allowed: {actor.QueuedMovementAllowsAbility}, " +
+                $"Movement max type: {GameplayData.Get()?.m_movementMaximumType}");
 
+            actorMovement.UpdateSquaresCanMoveTo();
             if (send)
             {
                 actorController.CallRpcUpdateRemainingMovement(actor.RemainingHorizontalMovement, actor.RemainingMovementWithQueuedAbility);
@@ -79,9 +77,7 @@ namespace ArtemisServer.GameServer
 
             if (!setWaypoint)
             {
-                actor.TeamSensitiveData_authority.MovementLine?.m_positions.Clear();
-                actor.MoveFromBoardSquare = actor.InitialMoveStartSquare;
-                UpdatePlayerMovement(actor, false);
+                ClearMovementRequest(actor, false);
             }
 
             actorMovement.UpdateSquaresCanMoveTo();
@@ -104,7 +100,7 @@ namespace ArtemisServer.GameServer
             if (path == null)  // TODO check cost
             {
                 Log.Info($"CmdSetSquare: Movement rejected");
-                UpdatePlayerMovement(actor); // TODO updating because we cancelled movement - perhaps we should not cancel in this case
+                UpdatePlayerRemainingMovement(actor); // TODO updating because we cancelled movement - perhaps we should not cancel in this case
                 actorTurnSM.CallRpcTurnMessage((int)TurnMessage.MOVEMENT_REJECTED, 0);
                 return;
             }
@@ -120,8 +116,15 @@ namespace ArtemisServer.GameServer
             actor.TeamSensitiveData_authority.MoveFromBoardSquare = boardSquare;
             actor.MoveFromBoardSquare = boardSquare;
 
-            UpdatePlayerMovement(actor);
+            UpdatePlayerRemainingMovement(actor);
             actorTurnSM.CallRpcTurnMessage((int)TurnMessage.MOVEMENT_ACCEPTED, 0);
+        }
+
+        public void ClearMovementRequest(ActorData actor, bool sendUpdateToClient)
+        {
+            actor.TeamSensitiveData_authority.MovementLine?.m_positions.Clear();
+            actor.MoveFromBoardSquare = actor.InitialMoveStartSquare;
+            UpdatePlayerRemainingMovement(actor, sendUpdateToClient);
         }
 
         public void ResolveMovement()
@@ -222,6 +225,11 @@ namespace ArtemisServer.GameServer
             return path;
         }
 
+        public void UpdateTurn()
+        {
+
+        }
+
         protected virtual void Awake()
         {
             if (instance == null)
@@ -229,10 +237,13 @@ namespace ArtemisServer.GameServer
                 instance = this;
             }
 
-            foreach (var player in GameFlowData.Get().GetPlayers())
+            if (GameFlowData.Get() != null)
             {
-                ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
-                actorTurnSM.OnCmdSetSquareCallback += CmdSetSquare;
+                foreach (var player in GameFlowData.Get().GetPlayers())
+                {
+                    ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
+                    actorTurnSM.OnCmdSetSquareCallback += CmdSetSquare;
+                }
             }
         }
 
@@ -242,10 +253,13 @@ namespace ArtemisServer.GameServer
             {
                 instance = null;
             }
-            foreach (var player in GameFlowData.Get().GetPlayers())
+            if (GameFlowData.Get() != null)
             {
-                ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
-                actorTurnSM.OnCmdSetSquareCallback -= CmdSetSquare;
+                foreach (var player in GameFlowData.Get().GetPlayers())
+                {
+                    ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
+                    actorTurnSM.OnCmdSetSquareCallback -= CmdSetSquare;
+                }
             }
         }
 
@@ -253,7 +267,5 @@ namespace ArtemisServer.GameServer
         {
             return instance;
         }
-
-
     }
 }

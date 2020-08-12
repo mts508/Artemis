@@ -86,7 +86,7 @@ namespace ArtemisServer.GameServer
                 yield return new WaitForSeconds(1);
                 yield return ActionResolution();
                 yield return MovementResolution();
-                ArtemisServerResolutionManager.Get().ApplyTargets();
+                yield return EndTurn();
             }
         }
 
@@ -100,13 +100,12 @@ namespace ArtemisServer.GameServer
             foreach (ActorData actor in GameFlowData.Get().GetActors())
             {
                 var turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
-                //Log.Info($"MoveFromBoardSquare: {actor.TeamSensitiveData_authority.MoveFromBoardSquare}");
+                ArtemisServerGameManager.Get().ClearAbilityRequests(actor);
                 actor.AppearAtBoardSquare(actor.TeamSensitiveData_authority.MoveFromBoardSquare);
-                ArtemisServerMovementManager.Get().UpdatePlayerMovement(actor);
-                actor.GetActorMovement().UpdateSquaresCanMoveTo();
-                actor.TeamSensitiveData_authority.SetAbilityRequestData(new List<ActorTargeting.AbilityRequestData>());
+                ArtemisServerMovementManager.Get().ClearMovementRequest(actor, true);
                 turnSm.CallRpcTurnMessage((int)TurnMessage.TURN_START, 0);
             }
+            ArtemisServerMovementManager.Get().UpdateTurn();
             ArtemisServerBarrierManager.Get().UpdateTurn();
             SharedEffectBarrierManager.Get().UpdateTurn();
 
@@ -173,8 +172,35 @@ namespace ArtemisServer.GameServer
             Artemis.ArtemisServer.Get().SharedActionBuffer.Networkm_actionPhase = ActionBufferPhase.MovementWait;
             yield return null;
             Artemis.ArtemisServer.Get().SharedActionBuffer.Networkm_actionPhase = ActionBufferPhase.Done;
+        }
 
+        private IEnumerator EndTurn()
+        {
             GameFlowData.Get().gameState = GameState.EndingTurn;
+            ArtemisServerResolutionManager.Get().ApplyTargets();
+
+            // Update statuses
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            {
+                var actorStatus = actor.GetActorStatus();
+                for (StatusType status = 0; status < StatusType.NUM; status++)
+                {
+                    if (actorStatus.HasStatus(status))
+                    {
+                        int duration = Math.Max(0, actorStatus.GetDurationOfStatus(status) - 1);
+                        actorStatus.UpdateStatusDuration(status, duration);
+                        if (duration == 0)
+                        {
+                            do
+                            {
+                                actorStatus.RemoveStatus(status);
+                            } while (actorStatus.HasStatus(status));
+                            Log.Info($"{actor.DisplayName}'s {status} status has expired.");
+                        }
+                    }
+                }
+            }
+            yield return null;
         }
 
         private void CmdGUITurnMessage(ActorTurnSM actorTurnSM, int msgEnum, int extraData)
@@ -218,12 +244,32 @@ namespace ArtemisServer.GameServer
 
             Log.Info($"CmdSelectAbilityRequest {actor.DisplayName} {actionType}");
 
-            AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
-            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
+            if (!actor.QueuedMovementAllowsAbility &&
+                actor.GetAbilityData().GetAbilityOfActionType(actionType).GetMovementAdjustment() != Ability.MovementAdjustment.FullMovement)
+            {
+                Log.Info($"CmdSelectAbilityRequest - Clearing movement for {actor.DisplayName}");
+                ArtemisServerMovementManager.Get().ClearMovementRequest(actor, true);
+            }
 
+            AbilityData abilityData = actor.gameObject.GetComponent<AbilityData>();
             abilityData.Networkm_selectedActionForTargeting = actionType;
-            turnSm.ClearAbilityTargets();
-            actor.TeamSensitiveData_authority.SetToggledAction(actionType, true);
+            SetAbilityRequest(actor, actionType, null);
+        }
+
+        private void CmdRequestCancelAction(ActorTurnSM actorTurnSM, int actionTypeInt, bool hasIncomingRequest)
+        {
+            ActorData actor = actorTurnSM.gameObject.GetComponent<ActorData>();
+            AbilityData.ActionType actionType = (AbilityData.ActionType)actionTypeInt;
+
+            if (!GameFlowData.Get().IsInDecisionState())
+            {
+                Log.Info($"Recieved CmdRequestCancelAction not in desicion state! {actor.DisplayName} {actionType} ({hasIncomingRequest})");
+                return;
+            }
+
+            Log.Info($"CmdRequestCancelAction {actor.DisplayName} {actionType} ({hasIncomingRequest})");
+            ClearAbilityRequest(actor, actionType);
+            ArtemisServerMovementManager.Get().UpdatePlayerRemainingMovement(actor, !hasIncomingRequest);
         }
 
         internal void OnCastAbility(NetworkConnection conn, int casterIndex, int actionTypeInt, List<AbilityTarget> targets)
@@ -237,21 +283,21 @@ namespace ArtemisServer.GameServer
             {
                 Log.Error($"Illegal OnCastAbility: {actor.DisplayName} does not belong to player {player.m_accountId}!");
                 turnSm.CallRpcTurnMessage((int)TurnMessage.ABILITY_REQUEST_REJECTED, 0);
+                ClearAbilityRequest(actor, actionType);
                 return;
             }
 
             Log.Info($"OnCastAbility {actor.DisplayName} {actionType} ({targets.Count} targets)");
 
-            if (!actor.QueuedMovementAllowsAbility)
-            {
-                Log.Info($"OnCastAbility {actor.DisplayName} {actionType} rejected");
-                turnSm.CallRpcTurnMessage((int)TurnMessage.ABILITY_REQUEST_REJECTED, 0);
-                return;
-            }
-
             // TODO AbilityData.ValidateAbilityOnTarget
             turnSm.CallRpcTurnMessage((int)TurnMessage.ABILITY_REQUEST_ACCEPTED, 0);
+            SetAbilityRequest(actor, actionType, targets);
 
+            ArtemisServerMovementManager.Get().UpdatePlayerRemainingMovement(actor);
+        }
+
+        private void SetAbilityRequest(ActorData actor, AbilityData.ActionType actionType, List<AbilityTarget> targets)
+        {
             List<ActorTargeting.AbilityRequestData> abilityRequest;
             Ability ability = actor.GetAbilityData().GetAbilityOfActionType(actionType);
             if (!ability.IsFreeAction())
@@ -262,7 +308,12 @@ namespace ArtemisServer.GameServer
                 {
                     if (actor.GetAbilityData().GetAbilityOfActionType(prevAbilityRequest.m_actionType).IsFreeAction())
                     {
-                        abilityRequest.Add(prevAbilityRequest); 
+                        abilityRequest.Add(prevAbilityRequest);
+                    }
+                    else
+                    {
+                        actor.TeamSensitiveData_authority.SetToggledAction(actionType, false); // seems unused
+                        actor.TeamSensitiveData_authority.SetQueuedAction(actionType, false);
                     }
                 }
             }
@@ -270,24 +321,40 @@ namespace ArtemisServer.GameServer
             {
                 abilityRequest = new List<ActorTargeting.AbilityRequestData>(actor.TeamSensitiveData_authority.GetAbilityRequestData());
             }
+            actor.TeamSensitiveData_authority.SetToggledAction(actionType, true); // seems unused
+            actor.TeamSensitiveData_authority.SetQueuedAction(actionType, true);
 
-            abilityRequest.Add(new ActorTargeting.AbilityRequestData(actionType, targets));
+            if (targets != null)
+            {
+                abilityRequest.Add(new ActorTargeting.AbilityRequestData(actionType, targets));
+            }
             actor.TeamSensitiveData_authority.SetAbilityRequestData(abilityRequest);
-
-            ArtemisServerMovementManager.Get().UpdatePlayerMovement(actor);
         }
 
-        public void CancelAbility(ActorData actor, bool sendMessage = true)
+        private void ClearAbilityRequest(ActorData actor, AbilityData.ActionType actionType)
         {
-            ActorTurnSM turnSm = actor.gameObject.GetComponent<ActorTurnSM>();
-
-            turnSm.ClearAbilityTargets();
-            actor.TeamSensitiveData_authority.SetAbilityRequestData(new List<ActorTargeting.AbilityRequestData>());
-            ArtemisServerMovementManager.Get().UpdatePlayerMovement(actor);
-            if (sendMessage)
+            var abilityRequest = new List<ActorTargeting.AbilityRequestData>();
+            foreach (var req in actor.TeamSensitiveData_authority.GetAbilityRequestData())
             {
-                turnSm.CallRpcTurnMessage((int)TurnMessage.CANCEL_BUTTON_CLICKED, 0);
+                if (req.m_actionType != actionType)
+                {
+                    abilityRequest.Add(req);
+                }
             }
+            actor.TeamSensitiveData_authority.SetToggledAction(actionType, false); // seems unused
+            actor.TeamSensitiveData_authority.SetQueuedAction(actionType, false);
+            actor.TeamSensitiveData_authority.SetAbilityRequestData(abilityRequest);
+        }
+
+        private void ClearAbilityRequests(ActorData actor)
+        {
+            for (AbilityData.ActionType actionType = 0; actionType < AbilityData.ActionType.NUM_ACTIONS; actionType++)
+            {
+                actor.TeamSensitiveData_authority.SetToggledAction(actionType, false); // seems unused
+            }
+            actor.TeamSensitiveData_authority.UnqueueActions();
+            actor.TeamSensitiveData_authority.SetAbilityRequestData(new List<ActorTargeting.AbilityRequestData>());
+            //actorTurnSM.ClearAbilityTargets();
         }
 
         protected virtual void Awake()
@@ -301,6 +368,7 @@ namespace ArtemisServer.GameServer
             {
                 ActorTurnSM actorTurnSM = player.GetComponent<ActorTurnSM>();
                 actorTurnSM.OnCmdGUITurnMessageCallback += CmdGUITurnMessage;
+                actorTurnSM.OnCmdRequestCancelActionCallback += CmdRequestCancelAction;
                 ActorController actorController = player.GetComponent<ActorController>();
                 actorController.OnCmdSelectAbilityRequestCallback += CmdSelectAbilityRequest;
             }

@@ -117,6 +117,10 @@ TeleportType.\u001D -> TeleportType.Unused
 <>f__mg$cache1 -> __f__mg_cache1
 <>f__mg$cache2 -> __f__mg_cache2
 
+## ActorTeamSensitiveData.cs
+internal -> public void SetQueuedAction(AbilityData.ActionType actionType, bool queued)
+internal -> public void UnqueueActions()
+
 ## Barrier.cs
 internal -> public static BarrierSerializeInfo BarrierToSerializeInfo(Barrier barrier)
 internal -> public static Barrier CreateBarrierFromSerializeInfo(BarrierSerializeInfo info)
