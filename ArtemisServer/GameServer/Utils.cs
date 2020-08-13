@@ -75,5 +75,17 @@ namespace ArtemisServer.GameServer
                     seqSource,
                     caster.GetTeam());
         }
+
+        public static ActorData GetActorByIndex(int actorIndex)
+        {
+            foreach (ActorData actor in GameFlowData.Get().GetActors())
+            {
+                if (actor.ActorIndex == actorIndex)
+                {
+                    return actor;
+                }
+            }
+            return null;
+        }
     }
 }
