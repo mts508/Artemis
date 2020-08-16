@@ -65,8 +65,9 @@ namespace ArtemisServer.GameServer.Abilities
                         switch (symbol.Key)
                         {
                             case AbilityTooltipSymbol.Damage:
+                                CurrentTargeterResolver.Targeter.IsActorInTargetRange(targetedActor.Key, out bool inCover);
                                 hitResults = new ClientActorHitResultsBuilder()
-                                    .SetDamage(symbol.Value, Vector3.zero, false, false)  // TODO
+                                    .SetDamage(symbol.Value, Vector3.zero, inCover, false, false)  // TODO
                                     .Build();
                                 Log.Info($"HitResults: damage: {symbol.Value}");
                                 break;

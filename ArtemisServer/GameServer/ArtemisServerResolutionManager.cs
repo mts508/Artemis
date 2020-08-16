@@ -11,7 +11,8 @@ namespace ArtemisServer.GameServer
     {
         private static ArtemisServerResolutionManager instance;
 
-        private Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActors;
+        private Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActorsThisTurn;
+        private Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActorsThisPhase;
         private List<ClientResolutionAction> Actions;
         private List<ActorAnimation> Animations;
         internal AbilityPriority Phase { get; private set; }
@@ -44,7 +45,7 @@ namespace ArtemisServer.GameServer
         {
             bool lastPhase = false;
 
-            TargetedActors = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
+            TargetedActorsThisPhase = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
             Actions = new List<ClientResolutionAction>();
             Animations = new List<ActorAnimation>();
 
@@ -56,6 +57,7 @@ namespace ArtemisServer.GameServer
                 {
                     TurnID = GameFlowData.Get().CurrentTurn
                 };
+                TargetedActorsThisTurn = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
             }
 
             while (Actions.Count == 0)
@@ -75,6 +77,8 @@ namespace ArtemisServer.GameServer
                     ResolveAbilities(actor, Phase);
                 }
                 GameFlowData.Get().activeOwnedActorData = null;
+
+                Utils.Add(ref TargetedActorsThisTurn, TargetedActorsThisPhase);
             }
 
             sab.Networkm_abilityPhase = Phase; // TODO check this
@@ -124,6 +128,7 @@ namespace ArtemisServer.GameServer
             // * set actor as active owned actor data -- calculations rely on this
             // * AppearAtBoardSquare to set actor's current board square
             // * patch TargeterUtils so that RemoveActorsInvisibleToClient isn't called on the server
+            // * disable ActorData.IsVisibleToClient on server (break cover otherwise)
             // * ..?
             foreach (ActorTargeting.AbilityRequestData ard in actor.TeamSensitiveData_authority.GetAbilityRequestData())
             {
@@ -139,7 +144,7 @@ namespace ArtemisServer.GameServer
                 resolver.Resolve();
                 Actions.AddRange(resolver.Actions);
                 Animations.AddRange(resolver.Animations);
-                Utils.Add(ref TargetedActors, resolver.TargetedActors);
+                Utils.Add(ref TargetedActorsThisPhase, resolver.TargetedActors);
             }
         }
 
@@ -171,7 +176,7 @@ namespace ArtemisServer.GameServer
 
             if (Phase < AbilityPriority.NumAbilityPriorities)
             {
-                Dictionary<int, int> actorIndexToDeltaHP = Utils.GetActorIndexToDeltaHP(TargetedActors);
+                Dictionary<int, int> actorIndexToDeltaHP = Utils.GetActorIndexToDeltaHP(TargetedActorsThisPhase);
                 List<int> participants = new List<int>(actorIndexToDeltaHP.Keys);
 
                 foreach (var action in Actions)
@@ -234,19 +239,28 @@ namespace ArtemisServer.GameServer
 
         public void ApplyTargets()
         {
-            foreach (ActorData target in TargetedActors.Keys)
+            if (TargetedActorsThisTurn == null)
             {
-                foreach (AbilityTooltipSymbol symbol in TargetedActors[target].Keys)
+                Log.Error("ArtemisServerResolutionManager.ApplyTargets: No targets to apply!");
+            }
+
+            Log.Info("Turn results:");
+            foreach (var targetInfo in TargetedActorsThisTurn)
+            {
+                ActorData target = targetInfo.Key;
+                Log.Info($" - {target.DisplayName}");
+                foreach (var tooltip in targetInfo.Value)
                 {
-                    int value = TargetedActors[target][symbol];
-                    Log.Info($"target {target.DisplayName} {symbol} {value}");
-                    switch (symbol)
-                    {
-                        case AbilityTooltipSymbol.Damage:
-                            target.SetHitPoints(target.HitPoints - value);
-                            break;
-                    }
+                    Log.Info($" - - {tooltip.Key} {tooltip.Value}");
                 }
+                targetInfo.Value.TryGetValue(AbilityTooltipSymbol.Damage, out int damage);
+                targetInfo.Value.TryGetValue(AbilityTooltipSymbol.Healing, out int healing);
+                targetInfo.Value.TryGetValue(AbilityTooltipSymbol.Absorb, out int absorb);
+                targetInfo.Value.TryGetValue(AbilityTooltipSymbol.Energy, out int energy);
+                int deltaHP = Mathf.Min(absorb - damage, 0) + healing;
+                target.SetHitPoints(target.HitPoints + deltaHP);
+                target.SetTechPoints(target.TechPoints + energy);
+                Log.Info($" - {target.DisplayName}: deltaHP {deltaHP} ({target.HitPoints} total), deltaEnergy {energy} ({target.TechPoints} total)");
             }
         }
 
