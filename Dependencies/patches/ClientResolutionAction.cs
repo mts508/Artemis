@@ -38,4 +38,35 @@ public class ClientResolutionAction : IComparable
 				break;
 		}
 	}
+
+	// GetHitResults + moveResults
+	public void GetAllHitResults(out Dictionary<ActorData, ClientActorHitResults> actorHitResList, out Dictionary<Vector3, ClientPositionHitResults> posHitResList)
+	{
+		actorHitResList = null;
+		posHitResList = null;
+		if (m_abilityResults != null)
+		{
+			actorHitResList = m_abilityResults.GetActorHitResults();
+			posHitResList = m_abilityResults.GetPosHitResults();
+			return;
+
+		}
+		if (m_effectResults != null)
+		{
+			actorHitResList = m_effectResults.GetActorHitResults();
+			posHitResList = m_effectResults.GetPosHitResults();
+			return;
+		}
+		if (m_moveResults != null)
+		{
+			m_moveResults.GetHitResults(out actorHitResList, out posHitResList);
+			return;
+		}
+	}
+
+	// GetCaster + moveResults
+	public ActorData GetAllCaster()
+	{
+		return GetCaster() ?? m_moveResults?.GetCaster();
+	}
 }
