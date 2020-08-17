@@ -122,6 +122,7 @@ internal -> public void SetQueuedAction(AbilityData.ActionType actionType, bool 
 internal -> public void UnqueueActions()
 
 ## Barrier.cs
+private -> public int m_maxHits
 internal -> public static BarrierSerializeInfo BarrierToSerializeInfo(Barrier barrier)
 internal -> public static Barrier CreateBarrierFromSerializeInfo(BarrierSerializeInfo info)
 
@@ -170,6 +171,7 @@ internal/private Dictionary<int, int> \u001C -> public Dictionary<int, int> Acto
 ## SequenceSource.cs
 internal -> public SequenceSource(...)
 internal -> public void SetWaitForClientEnable(bool value)
+internal -> public get_RootID
 
 ## TheatricsManager.cs
 internal -> public static TheatricsManager Get()

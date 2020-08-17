@@ -151,6 +151,9 @@ namespace ArtemisServer.GameServer
                 }
             }
 
+            var movementActions = ArtemisServerBarrierManager.Get().OnMovement(paths);
+            ArtemisServerResolutionManager.Get().SendMovementActions(movementActions);
+
             // TODO ClientMovementManager.MsgServerMovementStarting
 
             foreach (ActorData actor in GameFlowData.Get().GetActors())

@@ -87,5 +87,16 @@ namespace ArtemisServer.GameServer
             }
             return null;
         }
+
+        public static Dictionary<int, ActorData> GetActorByIndex()
+        {
+            var actors = GameFlowData.Get().GetActors();
+            var result = new Dictionary<int, ActorData>(actors.Count);
+            foreach (ActorData actor in actors)
+            {
+                result.Add(actor.ActorIndex, actor);
+            }
+            return result;
+        }
     }
 }

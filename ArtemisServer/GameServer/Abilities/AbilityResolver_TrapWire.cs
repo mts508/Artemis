@@ -52,9 +52,17 @@ namespace ArtemisServer.GameServer.Abilities
         protected override void MakeBarriers(SequenceSource seqSource)
         {
             StandardBarrierData data = Ability.ModdedBarrierData();
+            BarrierPayload payload = new BarrierPayload();
+            payload.OnEnemyHit = delegate (Barrier barrier)
+                {
+                    payload.RemoveAtTurnEnd = true;
+                };
+            payload.GetTechPointsForCaster = barrier => Ability.GetBaseTechPointInteractions();
             foreach (Vector3 facingDir in new List<Vector3>() { new Vector3(0, 0, 1), new Vector3(1, 0, 0) })
             {
-                Barriers.Add(Utils.ConsBarrier(m_caster, data, m_targetPos, facingDir, seqSource, Ability.ModdedBarrierSequencePrefab()));
+                var barrier = Utils.ConsBarrier(m_caster, data, m_targetPos, facingDir, seqSource, Ability.ModdedBarrierSequencePrefab());
+                Barriers.Add(barrier);
+                ArtemisServerBarrierManager.Get().SetBarrierPayload(barrier, payload);
             }
         }
 

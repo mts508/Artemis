@@ -48,14 +48,34 @@ namespace ArtemisServer.GameServer
         private List<ClientGameModeEvent> m_gameModeEvents = new List<ClientGameModeEvent>();
         private List<int> m_overconIds = new List<int>();
 
+        // TODO apply weakened/empowered/energized/etc in builder
         public ClientActorHitResultsBuilder SetDamage(int finalDamage, Vector3 origin, bool targetInCoverWrtDamage, bool boosted, bool reduced)
         {
-            m_hasDamage = true;
+            m_hasDamage = finalDamage != 0;
             m_finalDamage = finalDamage;
             m_targetInCoverWrtDamage = targetInCoverWrtDamage;
             m_damageBoosted = boosted;
             m_damageReduced = reduced;
             m_damageHitOrigin = origin;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetHealing(int finalHealing)
+        {
+            m_hasHealing = finalHealing != 0;
+            m_finalHealing = finalHealing;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetTechPoints(int finalTechPointsGain, int finalTechPointsLoss, int finalTechPointGainOnCaster)
+        {
+            m_hasTechPointGain = finalTechPointsGain != 0;
+            m_hasTechPointLoss = finalTechPointsLoss != 0;
+            m_hasTechPointGainOnCaster = finalTechPointGainOnCaster != 0;
+
+            m_finalTechPointsGain = finalTechPointsGain;
+            m_finalTechPointsLoss = finalTechPointsLoss;
+            m_finalTechPointGainOnCaster = finalTechPointGainOnCaster;
             return this;
         }
 

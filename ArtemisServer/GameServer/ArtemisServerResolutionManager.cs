@@ -106,18 +106,7 @@ namespace ArtemisServer.GameServer
                 NumResolutionActionsThisPhase = Actions.Count
             });
 
-            // TODO friendly/hostile visibility
-            Log.Info($"Sending {Actions.Count} actions");
-            foreach (ClientResolutionAction action in Actions)
-            {
-                Log.Info($"Sending action: {action.GetDebugDescription()}, Caster actor: {action.GetCaster().ActorIndex}, Action: {action.GetSourceAbilityActionType()}");
-                SendToAll((short)MyMsgType.SingleResolutionAction, new SingleResolutionAction()
-                {
-                    TurnIndex = GameFlowData.Get().CurrentTurn,
-                    PhaseIndex = (int)Phase,
-                    Action = action
-                });
-            }
+            SendActions(Actions);
 
             foreach (Barrier barrier in Barriers)
             {
@@ -127,6 +116,22 @@ namespace ArtemisServer.GameServer
 
             // TODO process ClientResolutionManager.SendResolutionPhaseCompleted
             return true;
+        }
+
+        private void SendActions(List<ClientResolutionAction> actions)
+        {
+            // TODO friendly/hostile visibility
+            Log.Info($"Sending {actions.Count} actions");
+            foreach (ClientResolutionAction action in actions)
+            {
+                Log.Info($"Sending action: {action.GetDebugDescription()}, Caster actor: {action.GetCaster()?.ActorIndex}, Action: {action.GetSourceAbilityActionType()}");
+                SendToAll((short)MyMsgType.SingleResolutionAction, new SingleResolutionAction()
+                {
+                    TurnIndex = GameFlowData.Get().CurrentTurn,
+                    PhaseIndex = (int)Phase,
+                    Action = action
+                });
+            }
         }
 
         public void ResolveAbilities(ActorData actor, AbilityPriority priority)
@@ -224,6 +229,18 @@ namespace ArtemisServer.GameServer
             AbilityPriority phase = Phase == AbilityPriority.NumAbilityPriorities ? AbilityPriority.INVALID : Phase;
 
             Theatrics.PlayPhase(phase);
+        }
+
+        public void SendMovementActions(List<ClientResolutionAction> actions)
+        {
+            SendToAll((short)MyMsgType.StartResolutionPhase, new StartResolutionPhase()
+            {
+                CurrentTurnIndex = GameFlowData.Get().CurrentTurn,
+                CurrentAbilityPhase = Phase,
+                NumResolutionActionsThisPhase = actions.Count
+            });
+            SendActions(actions);
+            // TODO apply damage (via TargetedActorsThisTurn)
         }
 
         public void OnClientResolutionPhaseCompleted(NetworkConnection conn, GameMessageManager.ClientResolutionPhaseCompleted msg)
