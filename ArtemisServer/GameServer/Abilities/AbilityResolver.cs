@@ -59,7 +59,7 @@ namespace ArtemisServer.GameServer.Abilities
                 if (CurrentTargeterResolver != null)
                 {
                     var targets = CurrentTargeterResolver.Resolve(m_caster, m_ability, i);
-                    Utils.Add(ref TargetedActors, targets);
+                    Utils.Add(TargetedActors, targets);
                 }
 
                 Dictionary<ActorData, ClientActorHitResults> actorToHitResults = new Dictionary<ActorData, ClientActorHitResults>();
@@ -71,6 +71,7 @@ namespace ArtemisServer.GameServer.Abilities
                         ClientActorHitResults hitResults;
                         switch (symbol.Key)
                         {
+                            // NOTE: If you add something here (or in descendants), make sure that ArtemisServerResolutionManager.ApplyActions can process it
                             case AbilityTooltipSymbol.Damage:
                                 CurrentTargeterResolver.Targeter.IsActorInTargetRange(targetedActor.Key, out bool inCover);
                                 hitResults = new ClientActorHitResultsBuilder()

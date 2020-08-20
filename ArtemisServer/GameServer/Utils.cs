@@ -23,14 +23,14 @@ namespace ArtemisServer.GameServer
             return actorIndexToDeltaHP;
         }
 
-        public static void Add(ref Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> dst, Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> src)
+        public static void Add<K>(Dictionary<ActorData, Dictionary<K, int>> dst, Dictionary<ActorData, Dictionary<K, int>> src)
         {
             foreach (var target in src)
             {
                 ActorData targetActor = target.Key;
                 if (!dst.ContainsKey(targetActor))
                 {
-                    dst[targetActor] = new Dictionary<AbilityTooltipSymbol, int>();
+                    dst[targetActor] = new Dictionary<K, int>();
                 }
                 foreach (var symbolToValue in target.Value)
                 {
@@ -39,6 +39,38 @@ namespace ArtemisServer.GameServer
                         dst[targetActor][symbolToValue.Key] = 0;
                     }
                     dst[targetActor][symbolToValue.Key] += symbolToValue.Value;
+                }
+            }
+        }
+
+        public static void Add<T>(Dictionary<ActorData, List<T>> dst, Dictionary<ActorData, List<T>> src)
+        {
+            foreach (var target in src)
+            {
+                ActorData targetActor = target.Key;
+                if (!dst.ContainsKey(targetActor))
+                {
+                    dst[targetActor] = new List<T>(target.Value);
+                }
+                else
+                {
+                    dst[targetActor].AddRange(target.Value);
+                }
+            }
+        }
+
+        public static void Add<T>(Dictionary<ActorData, List<T>> dst, Dictionary<ActorData, T> src)
+        {
+            foreach (var target in src)
+            {
+                ActorData targetActor = target.Key;
+                if (!dst.ContainsKey(targetActor))
+                {
+                    dst[targetActor] = new List<T> { target.Value };
+                }
+                else
+                {
+                    dst[targetActor].Add(target.Value);
                 }
             }
         }

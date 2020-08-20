@@ -177,7 +177,7 @@ namespace ArtemisServer.GameServer
         private IEnumerator EndTurn()
         {
             GameFlowData.Get().gameState = GameState.EndingTurn;
-            ArtemisServerResolutionManager.Get().ApplyTargets();
+            ArtemisServerResolutionManager.Get().ApplyActions();
 
             // Update statuses
             foreach (ActorData actor in GameFlowData.Get().GetActors())

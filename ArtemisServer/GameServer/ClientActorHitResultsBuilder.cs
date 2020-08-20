@@ -48,7 +48,7 @@ namespace ArtemisServer.GameServer
         private List<ClientGameModeEvent> m_gameModeEvents = new List<ClientGameModeEvent>();
         private List<int> m_overconIds = new List<int>();
 
-        // TODO apply weakened/empowered/energized/etc in builder
+        // TODO optionally apply weakened/empowered/energized/etc in builder
         public ClientActorHitResultsBuilder SetDamage(int finalDamage, Vector3 origin, bool targetInCoverWrtDamage, bool boosted, bool reduced)
         {
             m_hasDamage = finalDamage != 0;

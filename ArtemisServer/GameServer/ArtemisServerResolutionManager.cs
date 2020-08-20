@@ -13,7 +13,8 @@ namespace ArtemisServer.GameServer
 
         private Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActorsThisTurn;
         private Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>> TargetedActorsThisPhase;
-        private List<ClientResolutionAction> Actions;
+        private List<ClientResolutionAction> ActionsThisTurn;
+        private List<ClientResolutionAction> ActionsThisPhase;
         private List<ActorAnimation> Animations;
         private List<Barrier> Barriers;
         internal AbilityPriority Phase { get; private set; }
@@ -49,7 +50,7 @@ namespace ArtemisServer.GameServer
             bool lastPhase = false;
 
             TargetedActorsThisPhase = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
-            Actions = new List<ClientResolutionAction>();
+            ActionsThisPhase = new List<ClientResolutionAction>();
             Animations = new List<ActorAnimation>();
             Barriers = new List<Barrier>();
 
@@ -62,9 +63,10 @@ namespace ArtemisServer.GameServer
                     TurnID = GameFlowData.Get().CurrentTurn
                 };
                 TargetedActorsThisTurn = new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>();
+                ActionsThisTurn = new List<ClientResolutionAction>();
             }
 
-            while (Actions.Count == 0)
+            while (ActionsThisPhase.Count == 0)
             {
                 AdvancePhase();
                 if (Phase >= AbilityPriority.NumAbilityPriorities)
@@ -82,7 +84,7 @@ namespace ArtemisServer.GameServer
                 }
                 GameFlowData.Get().activeOwnedActorData = null;
 
-                Utils.Add(ref TargetedActorsThisTurn, TargetedActorsThisPhase);
+                Utils.Add(TargetedActorsThisTurn, TargetedActorsThisPhase);
             }
 
             sab.Networkm_abilityPhase = Phase; // TODO check this
@@ -103,10 +105,10 @@ namespace ArtemisServer.GameServer
             {
                 CurrentTurnIndex = GameFlowData.Get().CurrentTurn,
                 CurrentAbilityPhase = Phase,
-                NumResolutionActionsThisPhase = Actions.Count
+                NumResolutionActionsThisPhase = ActionsThisPhase.Count
             });
 
-            SendActions(Actions);
+            SendActions();
 
             foreach (Barrier barrier in Barriers)
             {
@@ -118,11 +120,11 @@ namespace ArtemisServer.GameServer
             return true;
         }
 
-        private void SendActions(List<ClientResolutionAction> actions)
+        private void SendActions()
         {
             // TODO friendly/hostile visibility
-            Log.Info($"Sending {actions.Count} actions");
-            foreach (ClientResolutionAction action in actions)
+            Log.Info($"Sending {ActionsThisPhase.Count} actions");
+            foreach (ClientResolutionAction action in ActionsThisPhase)
             {
                 Log.Info($"Sending action: {action.GetDebugDescription()}, Caster actor: {action.GetCaster()?.ActorIndex}, Action: {action.GetSourceAbilityActionType()}");
                 SendToAll((short)MyMsgType.SingleResolutionAction, new SingleResolutionAction()
@@ -132,6 +134,7 @@ namespace ArtemisServer.GameServer
                     Action = action
                 });
             }
+            ActionsThisTurn.AddRange(ActionsThisPhase);
         }
 
         public void ResolveAbilities(ActorData actor, AbilityPriority priority)
@@ -157,9 +160,9 @@ namespace ArtemisServer.GameServer
 
                 AbilityResolver resolver = GetAbilityResolver(actor, ability, priority, ard);
                 resolver.Resolve();
-                Actions.AddRange(resolver.Actions);
+                ActionsThisPhase.AddRange(resolver.Actions);
                 Animations.AddRange(resolver.Animations);
-                Utils.Add(ref TargetedActorsThisPhase, resolver.TargetedActors);
+                Utils.Add(TargetedActorsThisPhase, resolver.TargetedActors);
                 Barriers.AddRange(resolver.Barriers);
             }
         }
@@ -195,7 +198,7 @@ namespace ArtemisServer.GameServer
                 Dictionary<int, int> actorIndexToDeltaHP = Utils.GetActorIndexToDeltaHP(TargetedActorsThisPhase);
                 List<int> participants = new List<int>(actorIndexToDeltaHP.Keys);
 
-                foreach (var action in Actions)
+                foreach (var action in ActionsThisPhase)
                 {
                     int actorIndex = action.GetCaster().ActorIndex;
                     if (!participants.Contains(actorIndex))
@@ -233,14 +236,20 @@ namespace ArtemisServer.GameServer
 
         public void SendMovementActions(List<ClientResolutionAction> actions)
         {
+            if (Phase != AbilityPriority.INVALID)
+            {
+                Log.Error($"SendMovementActions called in {Phase} phase! Ignoring");
+                return;
+            }
+
             SendToAll((short)MyMsgType.StartResolutionPhase, new StartResolutionPhase()
             {
                 CurrentTurnIndex = GameFlowData.Get().CurrentTurn,
                 CurrentAbilityPhase = Phase,
                 NumResolutionActionsThisPhase = actions.Count
             });
-            SendActions(actions);
-            // TODO apply damage (via TargetedActorsThisTurn)
+            ActionsThisPhase = actions;
+            SendActions();
         }
 
         public void OnClientResolutionPhaseCompleted(NetworkConnection conn, GameMessageManager.ClientResolutionPhaseCompleted msg)
@@ -271,30 +280,45 @@ namespace ArtemisServer.GameServer
             return new AbilityResolver(actor, ability, priority, abilityRequestData);
         }
 
-        public void ApplyTargets()
+        public void ApplyActions()
         {
-            if (TargetedActorsThisTurn == null)
+            if (ActionsThisTurn == null)
             {
-                Log.Error("ArtemisServerResolutionManager.ApplyTargets: No targets to apply!");
+                Log.Error("ArtemisServerResolutionManager.ApplyTargets: No actions to apply!");
+            }
+
+            var results = new Dictionary<ActorData, List<Hit>>();
+            foreach (var action in ActionsThisTurn)
+            {
+                action.GetAllHitResults(out var actorHitResults, out var posHitResults);  // TODO posHitResults.m_reactionsOnPosHit
+                // TODO absorb in effects
+                var hits = new Dictionary<ActorData, Hit>(actorHitResults.Count);
+                foreach (var ahr in actorHitResults)
+                {
+                    hits.Add(ahr.Key, new Hit() { Caster = action.GetAllCaster(), HitResults = ahr.Value });
+                }
+
+                Utils.Add(results, hits);
             }
 
             Log.Info("Turn results:");
-            foreach (var targetInfo in TargetedActorsThisTurn)
+            foreach (var result in results)
             {
-                ActorData target = targetInfo.Key;
+                ActorData target = result.Key;
                 Log.Info($" - {target.DisplayName}");
-                foreach (var tooltip in targetInfo.Value)
+                foreach (Hit hit in result.Value)
                 {
-                    Log.Info($" - - {tooltip.Key} {tooltip.Value}");
+                    int damage = hit.HitResults.Damage;
+                    int healing = hit.HitResults.Healing;
+                    int energy = hit.HitResults.TechPoints;
+                    int absorb = 0; // TODO see above
+                    int energyOnCaster = hit.HitResults.TechPointsOnCaster;
+                    int deltaHP = Mathf.Min(absorb - damage, 0) + healing;
+                    target.SetHitPoints(target.HitPoints + deltaHP);
+                    target.SetTechPoints(target.TechPoints + energy);
+                    hit.Caster.SetTechPoints(hit.Caster.TechPoints + energyOnCaster);
+                    Log.Info($" - - dmg {damage}, abs {absorb}, hlg {healing}, deltaHP {deltaHP} ({target.HitPoints} total), nrg {energy} (+{energyOnCaster} on caster {hit.Caster.DisplayName})");
                 }
-                targetInfo.Value.TryGetValue(AbilityTooltipSymbol.Damage, out int damage);
-                targetInfo.Value.TryGetValue(AbilityTooltipSymbol.Healing, out int healing);
-                targetInfo.Value.TryGetValue(AbilityTooltipSymbol.Absorb, out int absorb);
-                targetInfo.Value.TryGetValue(AbilityTooltipSymbol.Energy, out int energy);
-                int deltaHP = Mathf.Min(absorb - damage, 0) + healing;
-                target.SetHitPoints(target.HitPoints + deltaHP);
-                target.SetTechPoints(target.TechPoints + energy);
-                Log.Info($" - {target.DisplayName}: deltaHP {deltaHP} ({target.HitPoints} total), deltaEnergy {energy} ({target.TechPoints} total)");
             }
         }
 
@@ -392,6 +416,12 @@ namespace ArtemisServer.GameServer
                     Actions.Add(ClientResolutionAction.ClientResolutionAction_DeSerializeFromStream(ref stream));
                 }
             }
+        }
+
+        private class Hit
+        {
+            public ClientActorHitResults HitResults;
+            public ActorData Caster;
         }
     }
 }
