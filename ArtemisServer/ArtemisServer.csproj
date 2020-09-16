@@ -72,7 +72,9 @@
     <Compile Include="BridgeServer\WebsocketManager.cs" />
     <Compile Include="GameMessageManager.cs" />
     <Compile Include="GameServer\Abilities\AbilityResolver.cs" />
+    <Compile Include="GameServer\Abilities\AbilityResolver_TrapWire.cs" />
     <Compile Include="GameServer\Abilities\AbilityResolver_TrickShot.cs" />
+    <Compile Include="GameServer\ArtemisServerBarrierManager.cs" />
     <Compile Include="GameServer\ArtemisServerGameManager.cs" />
     <Compile Include="GameServer\ArtemisServerMovementManager.cs" />
     <Compile Include="GameServer\ArtemisServerResolutionManager.cs" />

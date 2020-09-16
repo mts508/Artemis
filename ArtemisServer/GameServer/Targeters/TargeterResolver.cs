@@ -47,7 +47,7 @@ namespace ArtemisServer.GameServer.Targeters
                 Dictionary<AbilityTooltipSymbol, int> targetSymbols = new Dictionary<AbilityTooltipSymbol, int>();
                 ActorTargeting.GetNameplateNumbersForTargeter(caster, actorTarget.m_actor, ability, targeterIndex, targetSymbols);
                 Log.Info($"{targetSymbols.Count} nameplate numbers for {actorTarget.m_actor.DisplayName}");
-                Utils.Add(ref currentTargetedActors, new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>() {{ actorTarget.m_actor, targetSymbols }});
+                Utils.Add(currentTargetedActors, new Dictionary<ActorData, Dictionary<AbilityTooltipSymbol, int>>() {{ actorTarget.m_actor, targetSymbols }});
             }
 
             return currentTargetedActors;

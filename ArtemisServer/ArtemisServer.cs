@@ -43,10 +43,6 @@ namespace Artemis
             // Load map bundle
             AssetBundle MapsBundle = AssetBundle.LoadFromFile(Path.Combine(Application.dataPath, @"Bundles\scenes\maps.bundle"));
 
-            foreach (Scene sn in SceneManager.GetAllScenes()) {
-                Log.Info(sn.name);
-            }
-
             GameObject artemisServerObject = new GameObject("ArtemisServerComponent");
             artemisServerComponent = artemisServerObject.AddComponent<ArtemisServerComponent>();
             GameObject.DontDestroyOnLoad(artemisServerObject);
@@ -261,6 +257,7 @@ namespace Artemis
 
             artemisServerComponent.gameObject.AddComponent<ArtemisServerMovementManager>();
             artemisServerComponent.gameObject.AddComponent<ArtemisServerResolutionManager>();
+            artemisServerComponent.gameObject.AddComponent<ArtemisServerBarrierManager>();
             ArtemisServerGameManager gm = artemisServerComponent.gameObject.AddComponent<ArtemisServerGameManager>();
             gm.StartGame();
         }

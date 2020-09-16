@@ -117,6 +117,18 @@ TeleportType.\u001D -> TeleportType.Unused
 <>f__mg$cache1 -> __f__mg_cache1
 <>f__mg$cache2 -> __f__mg_cache2
 
+## ActorTeamSensitiveData.cs
+internal -> public void SetQueuedAction(AbilityData.ActionType actionType, bool queued)
+internal -> public void UnqueueActions()
+
+## Barrier.cs
+private -> public int m_maxHits
+internal -> public static BarrierSerializeInfo BarrierToSerializeInfo(Barrier barrier)
+internal -> public static Barrier CreateBarrierFromSerializeInfo(BarrierSerializeInfo info)
+
+## BarrierManager.cs
+private -> public List<Barrier> m_barriers = new List<Barrier>();
+
 ## CameraManager.cs
 in Update
 	if (!this.GetFlyThroughCamera().enabled) -> if (!this.GetFlyThroughCamera()?.enabled ?? false)
@@ -159,6 +171,7 @@ internal/private Dictionary<int, int> \u001C -> public Dictionary<int, int> Acto
 ## SequenceSource.cs
 internal -> public SequenceSource(...)
 internal -> public void SetWaitForClientEnable(bool value)
+internal -> public get_RootID
 
 ## TheatricsManager.cs
 internal -> public static TheatricsManager Get()

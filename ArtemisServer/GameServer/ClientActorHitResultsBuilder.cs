@@ -24,8 +24,8 @@ namespace ArtemisServer.GameServer
         private bool m_damageBoosted = false;
         private bool m_damageReduced = false;
         private bool m_isPartOfHealOverTime = false;
-        private bool m_updateCasterLastKnownPos = true;
-        private bool m_updateTargetLastKnownPos = true;
+        private bool m_updateCasterLastKnownPos = false;
+        private bool m_updateTargetLastKnownPos = false;
         private bool m_triggerCasterVisOnHitVisualOnly = false;
         private bool m_updateEffectHolderLastKnownPos = false;
         private ActorData m_effectHolderActor = null;
@@ -48,14 +48,52 @@ namespace ArtemisServer.GameServer
         private List<ClientGameModeEvent> m_gameModeEvents = new List<ClientGameModeEvent>();
         private List<int> m_overconIds = new List<int>();
 
+        // TODO optionally apply weakened/empowered/energized/etc in builder
         public ClientActorHitResultsBuilder SetDamage(int finalDamage, Vector3 origin, bool targetInCoverWrtDamage, bool boosted, bool reduced)
         {
-            m_hasDamage = true;
+            m_hasDamage = finalDamage != 0;
             m_finalDamage = finalDamage;
             m_targetInCoverWrtDamage = targetInCoverWrtDamage;
             m_damageBoosted = boosted;
             m_damageReduced = reduced;
             m_damageHitOrigin = origin;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetHealing(int finalHealing)
+        {
+            m_hasHealing = finalHealing != 0;
+            m_finalHealing = finalHealing;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetTechPoints(int finalTechPointsGain, int finalTechPointsLoss, int finalTechPointGainOnCaster)
+        {
+            m_hasTechPointGain = finalTechPointsGain != 0;
+            m_hasTechPointLoss = finalTechPointsLoss != 0;
+            m_hasTechPointGainOnCaster = finalTechPointGainOnCaster != 0;
+
+            m_finalTechPointsGain = finalTechPointsGain;
+            m_finalTechPointsLoss = finalTechPointsLoss;
+            m_finalTechPointGainOnCaster = finalTechPointGainOnCaster;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetRevealCaster(bool updateCasterLastKnownPos = true)
+        {
+            m_updateCasterLastKnownPos = updateCasterLastKnownPos;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetRevealTarget(bool updateTargetLastKnownPos = true)
+        {
+            m_updateTargetLastKnownPos = updateTargetLastKnownPos;
+            return this;
+        }
+
+        public ClientActorHitResultsBuilder SetCanBeReactedTo(bool canBeReactedTo = true)
+        {
+            m_canBeReactedTo = canBeReactedTo;
             return this;
         }
 

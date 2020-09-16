@@ -3,6 +3,14 @@ using UnityEngine;
 
 public class ClientActorHitResults
 {
+	public int Damage => m_finalDamage;
+
+	public int Healing => m_finalHealing;
+
+	public int TechPoints => m_finalTechPointsGain - m_finalTechPointsLoss;
+
+	public int TechPointsOnCaster => m_finalTechPointGainOnCaster;
+	
 	public ClientActorHitResults(
 		bool hasDamage,
 		bool hasHealing,
